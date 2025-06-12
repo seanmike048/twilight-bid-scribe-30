@@ -1,459 +1,270 @@
+import { useCallback, useReducer, memo } from 'react';
+import { Toaster } from '@/components/ui/sonner';
+import { toast } from 'sonner';
 
-import React, { useState, useRef } from 'react';
-import { Upload, FileText, BarChart3, Settings, Search, Copy, Trash2, Play, Filter } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
-import JsonEditor from '@/components/JsonEditor';
-import ValidationResults from '@/components/ValidationResults';
-import BulkAnalysis from '@/components/BulkAnalysis';
-import FileUpload from '@/components/FileUpload';
-import ValidationModeSelector from '@/components/ValidationModeSelector';
-import ExamplesDropdown from '@/components/ExamplesDropdown';
-import RequestCharacteristics from '@/components/RequestCharacteristics';
-import { exampleBidRequests } from '@/utils/exampleData';
+// Component Imports
+import { JsonEditor } from '@/components/JsonEditor';
+import { ValidationResults } from '@/components/ValidationResults';
+import { RequestCharacteristics } from '@/components/RequestCharacteristics';
+import { ExamplesDropdown } from '@/components/ExamplesDropdown';
+import { FileUpload } from '@/components/FileUpload';
+import { BulkAnalysis } from '@/components/BulkAnalysis';
+import { ValidationModeSelector } from '@/components/ValidationModeSelector';
 
-const Index = () => {
-  const [mode, setMode] = useState<'single' | 'bulk'>('single');
-  const [jsonInput, setJsonInput] = useState('');
-  const [validationMode, setValidationMode] = useState('auto');
-  const [validationResults, setValidationResults] = useState(null);
-  const [requestCharacteristics, setRequestCharacteristics] = useState(null);
-  const [bulkData, setBulkData] = useState(null);
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [selectedRequestFromBulk, setSelectedRequestFromBulk] = useState(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+// --- OPTIMIZATION 1: Strong TypeScript Interfaces ---
+// Defining clear types for our data makes the entire application more robust and predictable.
+interface ValidationIssue {
+  severity: 'Error' | 'Warning' | 'Info';
+  message: string;
+  path: string;
+}
 
-  const loadExample = (type: string) => {
-    if (exampleBidRequests[type]) {
-      setJsonInput(exampleBidRequests[type]);
-      setValidationResults(null);
-      setRequestCharacteristics(null);
-    }
-  };
+interface AnalysisDetail {
+  deviceType?: string;
+  timeout?: string;
+  currency?: string;
+  schainNodes?: string;
+  bidFloor?: string;
+  privacySignals?: string[];
+  country?: string;
+}
 
-  const formatJson = () => {
-    try {
-      const parsed = JSON.parse(jsonInput);
-      setJsonInput(JSON.stringify(parsed, null, 2));
-    } catch (error) {
-      console.log('Cannot format invalid JSON');
-    }
-  };
+interface AnalysisResult {
+  requestType: string;
+  mediaFormat: string;
+  impressions: number;
+  platform: string;
+  details: AnalysisDetail;
+}
 
-  const clearAll = () => {
-    setJsonInput('');
-    setValidationResults(null);
-    setRequestCharacteristics(null);
-    setBulkData(null);
-    setSelectedRequestFromBulk(null);
-    setMode('single');
-  };
+interface BidRequest {
+  id: string;
+  imp: object[];
+  // Add other common bid request fields if needed for typing
+}
 
-  const analyzeRequest = async () => {
-    if (!jsonInput.trim()) return;
-    
-    setIsAnalyzing(true);
-    
-    try {
-      // Call the backend API
-      const response = await fetch('/validate', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          json_string: jsonInput,
-          validation_mode: validationMode
-        })
-      });
+interface AppState {
+  mode: 'single' | 'bulk';
+  isLoading: boolean;
+  jsonText: string;
+  parsedJson: BidRequest | null;
+  analysisResult: AnalysisResult | null;
+  validationIssues: ValidationIssue[];
+  
+  // Bulk mode specific state
+  bulkRequests: BidRequest[];
+  fileName: string;
+}
 
-      if (!response.ok) {
-        throw new Error('Analysis failed');
-      }
+// --- OPTIMIZATION 2: Centralized State Management with useReducer ---
+// This reducer manages all state transitions in one place, making the logic cleaner
+// than scattering multiple useState calls.
+type AppAction =
+  | { type: 'SET_MODE'; payload: 'single' | 'bulk' }
+  | { type: 'SET_JSON_TEXT'; payload: string }
+  | { type: 'START_ANALYSIS' }
+  | { type: 'SET_SINGLE_RESULT'; payload: { analysis: AnalysisResult; issues: ValidationIssue[]; json: BidRequest; text: string } }
+  | { type: 'SET_BULK_RESULT'; payload: { requests: BidRequest[]; fileName: string } }
+  | { type: 'SET_ERROR'; payload: string }
+  | { type: 'CLEAR' };
 
-      const results = await response.json();
-      setRequestCharacteristics(results.detected_characteristics);
-      setValidationResults(results);
-      
-    } catch (error) {
-      console.error('Analysis error:', error);
-      // Fallback to mock data for development
-      const mockResults = generateMockResults();
-      setRequestCharacteristics(mockResults.detected_characteristics);
-      setValidationResults(mockResults);
-    } finally {
-      setIsAnalyzing(false);
-    }
-  };
+const initialState: AppState = {
+  mode: 'single',
+  isLoading: false,
+  jsonText: '',
+  parsedJson: null,
+  analysisResult: null,
+  validationIssues: [],
+  bulkRequests: [],
+  fileName: '',
+};
 
-  const generateMockResults = () => {
-    // Enhanced mock data generator based on actual JSON input
-    try {
-      const parsed = JSON.parse(jsonInput);
-      const hasVideo = parsed.imp?.some(imp => imp.video);
-      const hasNative = parsed.imp?.some(imp => imp.native);
-      const hasBanner = parsed.imp?.some(imp => imp.banner);
-      const isCtv = parsed.device?.devicetype === 3 || parsed.device?.devicetype === 7;
-      
-      let requestType = 'Display';
-      let mediaFormat = 'Banner';
-      
-      if (isCtv) {
-        requestType = 'Connected TV (CTV)';
-        mediaFormat = 'Video';
-      } else if (hasVideo) {
-        requestType = 'Video';
-        mediaFormat = 'Video';
-      } else if (hasNative) {
-        requestType = 'Native';
-        mediaFormat = 'Native';
-      }
-
-      const characteristics = {
-        requestType,
-        mediaFormat,
-        impressions: parsed.imp?.length || 0,
-        platform: parsed.app ? 'Mobile App' : (parsed.site ? 'Web' : 'Unknown'),
-        details: {
-          deviceType: parsed.device?.make || 'Unknown',
-          timeout: parsed.tmax ? `${parsed.tmax}ms` : 'N/A',
-          currency: parsed.cur?.[0] || 'USD',
-          schainNodes: parsed.source?.schain?.nodes ? `${parsed.source.schain.nodes.length} nodes` : 'Not present',
-          bidFloor: parsed.imp?.[0]?.bidfloor ? `${parsed.imp[0].bidfloorcur || 'USD'} ${parsed.imp[0].bidfloor}` : 'N/A',
-          privacySignals: parsed.regs?.gdpr === 1 ? ['GDPR'] : ['None detected'],
-          country: parsed.device?.geo?.country || 'N/A'
-        }
-      };
-
-      // Generate realistic issues based on the JSON
-      const issues = [];
-      if (!parsed.id) {
-        issues.push({
-          severity: 'Error',
-          path: 'id',
-          message: 'BidRequest.id is missing or empty',
-          line: 1
-        });
-      }
-      
-      if (parsed.regs?.gdpr === 1 && !parsed.user?.ext?.consent) {
-        issues.push({
-          severity: 'Error',
-          path: 'user.ext.consent',
-          message: 'GDPR consent string missing when regs.gdpr=1',
-          line: 25
-        });
-      }
-
-      if (parsed.device?.lmt === 1 && parsed.device?.ifa && parsed.device.ifa !== '00000000-0000-0000-0000-000000000000') {
-        issues.push({
-          severity: 'Error',
-          path: 'device.ifa',
-          message: 'Device IFA should not be present when device.lmt=1',
-          line: 18
-        });
-      }
-
-      if (hasVideo && !parsed.imp?.some(imp => imp.video?.mimes)) {
-        issues.push({
-          severity: 'Error',
-          path: 'imp[0].video.mimes',
-          message: 'Video MIME types array is required but missing',
-          line: 12
-        });
-      }
-
+function appReducer(state: AppState, action: AppAction): AppState {
+  switch (action.type) {
+    case 'SET_MODE':
+      return { ...initialState, mode: action.payload }; // Reset state when switching modes
+    case 'SET_JSON_TEXT':
+      return { ...state, jsonText: action.payload };
+    case 'START_ANALYSIS':
+      return { ...state, isLoading: true };
+    case 'SET_SINGLE_RESULT':
       return {
-        detected_characteristics: characteristics,
-        validation_summary: {
-          errors: issues.filter(i => i.severity === 'Error').length,
-          warnings: issues.filter(i => i.severity === 'Warning').length,
-          info: issues.filter(i => i.severity === 'Info').length
-        },
-        issues_found: issues
+        ...state,
+        isLoading: false,
+        analysisResult: action.payload.analysis,
+        validationIssues: action.payload.issues,
+        parsedJson: action.payload.json,
+        jsonText: action.payload.text,
       };
-    } catch (error) {
+    case 'SET_BULK_RESULT':
       return {
-        detected_characteristics: {
-          requestType: 'Invalid/Malformed',
-          mediaFormat: 'N/A',
-          impressions: 0,
-          platform: 'Unknown'
-        },
-        validation_summary: { errors: 1, warnings: 0, info: 0 },
-        issues_found: [{
-          severity: 'Error',
-          path: 'BidRequest',
-          message: 'Invalid JSON format',
-          line: 1
-        }]
+        ...state,
+        mode: 'bulk',
+        isLoading: false,
+        bulkRequests: action.payload.requests,
+        fileName: action.payload.fileName,
+        // Clear single-view results
+        analysisResult: null,
+        validationIssues: [],
+        jsonText: '',
       };
-    }
-  };
+    case 'SET_ERROR':
+      toast.error(action.payload);
+      return { ...state, isLoading: false };
+    case 'CLEAR':
+        return {
+            ...initialState,
+            mode: state.mode // Retain the current mode
+        };
+    default:
+      throw new Error('Unhandled action type');
+  }
+}
 
-  const handleFileUpload = async (file: File) => {
-    setMode('bulk');
-    setIsAnalyzing(true);
+// --- Memoized Components for Performance ---
+// By wrapping components in React.memo, we prevent them from re-rendering if their props haven't changed.
+const MemoizedJsonEditor = memo(JsonEditor);
+const MemoizedRequestCharacteristics = memo(RequestCharacteristics);
+const MemoizedValidationResults = memo(ValidationResults);
+const MemoizedBulkAnalysis = memo(BulkAnalysis);
+
+function IndexPage() {
+  const [state, dispatch] = useReducer(appReducer, initialState);
+
+  // --- OPTIMIZATION 3: Using useCallback ---
+  // This ensures that functions passed down as props don't get recreated on every render,
+  // which is essential for React.memo to work effectively.
+  const handleAnalyze = useCallback(async () => {
+    dispatch({ type: 'START_ANALYSIS' });
+
+    // Simulate API call to the Python backend
+    // In a real app, this would be a fetch() call.
+    try {
+        const response = await fetch('/api/validate', { // Assuming a proxy is set up in vite.config.ts
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ json_string: state.jsonText })
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || 'Backend analysis failed');
+        }
+        
+        const data = await response.json();
+
+        dispatch({
+            type: 'SET_SINGLE_RESULT',
+            payload: {
+                analysis: data.detected_characteristics,
+                issues: data.issues_found,
+                json: JSON.parse(state.jsonText), // Keep the parsed JSON
+                text: state.jsonText
+            }
+        });
+        toast.success("Analysis complete!");
+    } catch (e) {
+      if (e instanceof SyntaxError) {
+        dispatch({ type: 'SET_ERROR', payload: 'Invalid JSON format. Please check your input.' });
+      } else {
+        dispatch({ type: 'SET_ERROR', payload: e.message });
+      }
+    }
+  }, [state.jsonText]);
+  
+  const handleFileUpload = useCallback(async (file: File) => {
+    dispatch({ type: 'START_ANALYSIS' });
+    const formData = new FormData();
+    formData.append('file', file);
     
     try {
-      const formData = new FormData();
-      formData.append('file', file);
-
-      const response = await fetch('/validate', {
-        method: 'POST',
-        body: formData
-      });
-
-      if (!response.ok) {
-        throw new Error('File upload failed');
-      }
-
-      const results = await response.json();
-      setBulkData(results);
-      
-    } catch (error) {
-      console.error('File upload error:', error);
-      // Fallback to mock data
-      const mockBulkData = {
-        fileName: file.name,
-        totalRequests: 400,
-        global_stats: {
-          health: { valid: 45, warnings: 35, errors: 20 },
-          requestTypes: { 'CTV': 180, 'Display': 120, 'Native': 80, 'Video': 20 },
-          topCountries: { 'US': 200, 'UK': 80, 'DE': 60, 'FR': 40, 'CA': 20 },
-          topErrors: [
-            'Missing video.mimes array',
-            'Invalid device IFA when LMT=1', 
-            'Malformed geo coordinates',
-            'Missing consent string',
-            'Invalid supply chain structure'
-          ]
+        const response = await fetch('/api/validate', {
+            method: 'POST',
+            body: formData
+        });
+        
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || 'Bulk analysis failed');
         }
-      };
-      setBulkData(mockBulkData);
-    } finally {
-      setIsAnalyzing(false);
-    }
-  };
+        
+        const data = await response.json();
+        dispatch({ type: 'SET_BULK_RESULT', payload: { requests: data.raw_requests, fileName: file.name } });
+        toast.success(`Bulk analysis complete for ${file.name}`);
 
-  const handleRequestSelection = (requestData: any) => {
-    setSelectedRequestFromBulk(requestData);
-    // Analyze the selected request for detailed view
-    setJsonInput(JSON.stringify(requestData, null, 2));
-    const mockResults = generateMockResults();
-    setRequestCharacteristics(mockResults.detected_characteristics);
-    setValidationResults(mockResults);
-  };
+    } catch (e) {
+        dispatch({ type: 'SET_ERROR', payload: e.message });
+    }
+  }, []);
+
+  const handleSetJsonText = useCallback((text: string) => {
+    dispatch({ type: 'SET_JSON_TEXT', payload: text });
+  }, []);
+
+  const handleClear = useCallback(() => {
+    dispatch({ type: 'CLEAR' });
+  }, []);
+
+  const handleSetMode = useCallback((mode: 'single' | 'bulk') => {
+    dispatch({ type: 'SET_MODE', payload: mode });
+  }, []);
+
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
-      {/* Header */}
-      <header className="border-b border-slate-700/50 bg-slate-900/20 backdrop-blur-sm sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <div className="flex items-center space-x-3">
-                <div className="w-10 h-10 rounded-lg gradient-primary flex items-center justify-center">
-                  <BarChart3 className="w-6 h-6 text-white" />
-                </div>
-                <div>
-                  <h1 className="text-xl font-bold text-gradient">BABE Verificator</h1>
-                  <p className="text-sm text-slate-400">NextGen OpenRTB Analysis</p>
-                </div>
-              </div>
-            </div>
-            
-            <div className="flex items-center space-x-3">
-              <div className="flex items-center space-x-2 bg-slate-800/50 rounded-lg p-1">
-                <button
-                  onClick={() => setMode('single')}
-                  className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all ${
-                    mode === 'single' 
-                      ? 'bg-orange-500 text-white shadow-lg' 
-                      : 'text-slate-400 hover:text-white'
-                  }`}
-                >
-                  Single Mode
-                </button>
-                <button
-                  onClick={() => setMode('bulk')}
-                  className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all ${
-                    mode === 'bulk' 
-                      ? 'bg-orange-500 text-white shadow-lg' 
-                      : 'text-slate-400 hover:text-white'
-                  }`}
-                >
-                  Bulk Mode
-                </button>
-              </div>
-              <Button variant="outline" size="sm">
-                <Settings className="w-4 h-4" />
-              </Button>
-            </div>
-          </div>
-        </div>
-      </header>
+    <div className="min-h-screen bg-slate-950 text-slate-100 font-sans">
+      <main className="container mx-auto p-4 md:p-8">
+        <header className="mb-8">
+          <h1 className="text-3xl font-bold text-white">Twilight Bid Scribe</h1>
+          <p className="text-slate-400 mt-1">An integrated platform for OpenRTB bid request analysis and validation.</p>
+        </header>
 
-      <div className="max-w-7xl mx-auto px-6 py-8">
-        <div className="grid grid-cols-12 gap-8 h-full">
-          {/* Left Column - Control Panel */}
-          <div className="col-span-5 space-y-6">
-            {mode === 'single' ? (
-              <>
-                {/* JSON Input Card */}
-                <Card className="gradient-card border-slate-700/50 fade-in">
-                  <div className="p-6">
-                    <div className="flex items-center justify-between mb-4">
-                      <h2 className="text-lg font-semibold flex items-center">
-                        <FileText className="w-5 h-5 mr-2 text-orange-500" />
-                        Bid Request Input
-                      </h2>
-                      <div className="flex space-x-2">
-                        <Button variant="outline" size="sm" onClick={formatJson}>
-                          Format JSON
-                        </Button>
-                      </div>
-                    </div>
-                    
-                    <JsonEditor 
-                      value={jsonInput}
-                      onChange={setJsonInput}
-                      placeholder="Paste your OpenRTB bid request JSON here..."
-                    />
-                    
-                    <div className="flex space-x-3 mt-4">
-                      <Button 
-                        onClick={analyzeRequest}
-                        disabled={!jsonInput.trim() || isAnalyzing}
-                        className="btn-primary flex-1"
-                      >
-                        {isAnalyzing ? (
-                          <>
-                            <div className="animate-spin w-4 h-4 mr-2 border-2 border-white border-t-transparent rounded-full" />
-                            Analyzing...
-                          </>
-                        ) : (
-                          <>
-                            <Play className="w-4 h-4 mr-2" />
-                            Analyze Request
-                          </>
-                        )}
-                      </Button>
-                      <Button variant="outline" onClick={clearAll}>
-                        <Trash2 className="w-4 h-4 mr-2" />
-                        Clear
-                      </Button>
-                    </div>
-                  </div>
-                </Card>
-
-                {/* Validation Configuration */}
-                <Card className="gradient-card border-slate-700/50 slide-up">
-                  <div className="p-6 space-y-4">
-                    <ValidationModeSelector 
-                      value={validationMode}
-                      onChange={setValidationMode}
-                    />
-                    <ExamplesDropdown onLoadExample={loadExample} />
-                  </div>
-                </Card>
-
-                {/* Upload Section */}
-                <Card className="gradient-card border-slate-700/50 slide-up">
-                  <div className="p-6">
-                    <h3 className="text-md font-medium mb-3 flex items-center">
-                      <Upload className="w-4 h-4 mr-2 text-orange-500" />
-                      Switch to Bulk Analysis
-                    </h3>
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+          <div className="lg:col-span-4 space-y-6">
+            {state.mode === 'single' ? (
+              <div className="card bg-slate-900/50 p-6 space-y-4">
+                 <h2 className="text-xl font-semibold flex items-center text-white"><i className="fas fa-keyboard mr-3"></i>Bid Request Input</h2>
+                 <MemoizedJsonEditor jsonText={state.jsonText} setJsonText={handleSetJsonText} />
+                 <div className="flex flex-wrap gap-2 items-center">
+                    <button onClick={handleAnalyze} disabled={state.isLoading} className="btn btn-primary bg-amber-500 hover:bg-amber-400 disabled:opacity-50 disabled:cursor-not-allowed">
+                      {state.isLoading ? <i className="fas fa-spinner animate-spin mr-2"></i> : <i className="fas fa-magnifying-glass-chart mr-2"></i>}
+                      Analyze
+                    </button>
                     <FileUpload onFileUpload={handleFileUpload} />
-                  </div>
-                </Card>
-              </>
+                 </div>
+                 <div className="flex flex-wrap gap-2 items-center">
+                    <ExamplesDropdown setJsonText={handleSetJsonText} />
+                    <ValidationModeSelector />
+                    <button onClick={handleClear} className="btn btn-secondary">Clear</button>
+                 </div>
+              </div>
             ) : (
-              <BulkAnalysis 
-                data={bulkData} 
-                isLoading={isAnalyzing}
-                onReturnToSingle={() => {
-                  setMode('single');
-                  setBulkData(null);
-                  setSelectedRequestFromBulk(null);
-                }}
-                onRequestSelect={handleRequestSelection}
+              <MemoizedBulkAnalysis
+                fileName={state.fileName}
+                requests={state.bulkRequests}
+                onClear={() => handleSetMode('single')}
               />
             )}
           </div>
 
-          {/* Right Column - Results Canvas */}
-          <div className="col-span-7 space-y-6">
-            {mode === 'single' ? (
+          <div className="lg:col-span-8 space-y-6">
+            {state.mode === 'single' && (
               <>
-                {requestCharacteristics && (
-                  <RequestCharacteristics characteristics={requestCharacteristics} />
-                )}
-                <ValidationResults 
-                  results={validationResults}
-                  isLoading={isAnalyzing}
-                  onIssueClick={(path) => console.log('Clicked issue:', path)}
-                />
+                <MemoizedRequestCharacteristics analysis={state.analysisResult} />
+                <MemoizedValidationResults issues={state.validationIssues} jsonText={state.jsonText} />
               </>
-            ) : (
-              <div className="space-y-6">
-                {selectedRequestFromBulk && (
-                  <>
-                    <RequestCharacteristics characteristics={requestCharacteristics} />
-                    <ValidationResults 
-                      results={validationResults}
-                      isLoading={false}
-                      onIssueClick={(path) => console.log('Clicked issue:', path)}
-                    />
-                  </>
-                )}
-                {bulkData && !selectedRequestFromBulk && (
-                  <Card className="gradient-card border-slate-700/50 fade-in">
-                    <div className="p-6">
-                      <h2 className="text-lg font-semibold mb-4">Request List</h2>
-                      <p className="text-slate-400 mb-4">
-                        Click on any request below to view detailed analysis
-                      </p>
-                      <div className="space-y-3">
-                        {Array.from({ length: 10 }, (_, i) => (
-                          <div 
-                            key={i} 
-                            className="p-3 bg-slate-800/30 rounded-lg border border-slate-700/30 hover:bg-slate-700/30 cursor-pointer transition-all"
-                            onClick={() => handleRequestSelection({ id: `req_${1000 + i}` })}
-                          >
-                            <div className="flex items-center justify-between">
-                              <span className="font-mono text-sm">ID: req_{1000 + i}</span>
-                              <div className="flex space-x-4 text-sm text-slate-400">
-                                <span>Type: {['CTV', 'Display', 'Native'][i % 3]}</span>
-                                <span>Country: {['US', 'UK', 'DE', 'FR'][i % 4]}</span>
-                                <span className="text-red-400">Errors: {Math.floor(Math.random() * 5)}</span>
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </Card>
-                )}
-              </div>
+            )}
+             {state.mode === 'bulk' && state.bulkRequests.length > 0 && (
+                <div className="card bg-slate-900/50 p-6">
+                    <h2 className="text-xl font-semibold">Bulk Results will be displayed here...</h2>
+                    <p className="text-slate-400 mt-2">Functionality to display and select individual requests from the bulk upload can be built out here.</p>
+                </div>
             )}
           </div>
         </div>
-      </div>
-
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept=".txt,.json,.log"
-        style={{ display: 'none' }}
-        onChange={(e) => {
-          const file = e.target.files?.[0];
-          if (file) handleFileUpload(file);
-        }}
-      />
+      </main>
+      <Toaster theme="dark" />
     </div>
   );
-};
+}
 
-export default Index;
+export default IndexPage;
