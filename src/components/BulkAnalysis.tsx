@@ -2,15 +2,21 @@
 import React from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, FileText, BarChart3, Globe, AlertTriangle, Filter } from 'lucide-react';
+import { ArrowLeft, FileText, BarChart3, Globe, AlertTriangle, Filter, Map } from 'lucide-react';
 
 interface BulkAnalysisProps {
   data: any;
   isLoading: boolean;
   onReturnToSingle: () => void;
+  onRequestSelect?: (request: any) => void;
 }
 
-const BulkAnalysis: React.FC<BulkAnalysisProps> = ({ data, isLoading, onReturnToSingle }) => {
+const BulkAnalysis: React.FC<BulkAnalysisProps> = ({ 
+  data, 
+  isLoading, 
+  onReturnToSingle,
+  onRequestSelect 
+}) => {
   if (isLoading) {
     return (
       <div className="space-y-6">
@@ -37,6 +43,9 @@ const BulkAnalysis: React.FC<BulkAnalysisProps> = ({ data, isLoading, onReturnTo
       </div>
     );
   }
+
+  const healthStats = data.global_stats?.health || {};
+  const total = healthStats.valid + healthStats.warnings + healthStats.errors;
 
   return (
     <div className="space-y-6">
@@ -86,80 +95,95 @@ const BulkAnalysis: React.FC<BulkAnalysisProps> = ({ data, isLoading, onReturnTo
           
           <div className="grid grid-cols-3 gap-4 mb-6">
             <div className="text-center p-4 bg-green-500/10 rounded-lg border border-green-500/20">
-              <p className="text-2xl font-bold text-green-400">{data.global_stats.health_chart.valid}%</p>
+              <p className="text-2xl font-bold text-green-400">
+                {total > 0 ? Math.round((healthStats.valid / total) * 100) : 0}%
+              </p>
               <p className="text-slate-400 text-sm">Valid</p>
             </div>
             <div className="text-center p-4 bg-orange-500/10 rounded-lg border border-orange-500/20">
-              <p className="text-2xl font-bold text-orange-400">{data.global_stats.health_chart.withWarnings}%</p>
+              <p className="text-2xl font-bold text-orange-400">
+                {total > 0 ? Math.round((healthStats.warnings / total) * 100) : 0}%
+              </p>
               <p className="text-slate-400 text-sm">With Warnings</p>
             </div>
             <div className="text-center p-4 bg-red-500/10 rounded-lg border border-red-500/20">
-              <p className="text-2xl font-bold text-red-400">{data.global_stats.health_chart.withErrors}%</p>
+              <p className="text-2xl font-bold text-red-400">
+                {total > 0 ? Math.round((healthStats.errors / total) * 100) : 0}%
+              </p>
               <p className="text-slate-400 text-sm">With Errors</p>
             </div>
           </div>
 
           {/* Request Type Distribution */}
-          <div className="mb-6">
-            <h4 className="font-medium mb-3">Request Type Distribution</h4>
-            <div className="space-y-2">
-              {Object.entries(data.global_stats.request_types).map(([type, count]: [string, any]) => (
-                <div key={type} className="flex items-center justify-between p-2 bg-slate-800/30 rounded">
-                  <span className="text-sm">{type}</span>
-                  <div className="flex items-center space-x-2">
-                    <div className="w-24 h-2 bg-slate-700 rounded-full overflow-hidden">
-                      <div 
-                        className="h-full bg-gradient-to-r from-orange-500 to-yellow-500 rounded-full"
-                        style={{ width: `${(count / data.totalRequests) * 100}%` }}
-                      />
+          {data.global_stats?.requestTypes && (
+            <div className="mb-6">
+              <h4 className="font-medium mb-3">Request Type Distribution</h4>
+              <div className="space-y-2">
+                {Object.entries(data.global_stats.requestTypes).map(([type, count]: [string, any]) => (
+                  <div key={type} className="flex items-center justify-between p-2 bg-slate-800/30 rounded">
+                    <span className="text-sm">{type}</span>
+                    <div className="flex items-center space-x-2">
+                      <div className="w-24 h-2 bg-slate-700 rounded-full overflow-hidden">
+                        <div 
+                          className="h-full bg-gradient-to-r from-orange-500 to-yellow-500 rounded-full"
+                          style={{ width: `${(count / data.totalRequests) * 100}%` }}
+                        />
+                      </div>
+                      <span className="text-sm font-medium w-8 text-right">{count}</span>
                     </div>
-                    <span className="text-sm font-medium w-8 text-right">{count}</span>
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
-          </div>
+          )}
 
-          {/* Privacy Coverage */}
-          <div className="mb-6">
-            <h4 className="font-medium mb-3">Privacy Signal Coverage</h4>
-            <div className="space-y-2">
-              {Object.entries(data.global_stats.privacy_coverage).map(([signal, count]: [string, any]) => (
-                <div key={signal} className="flex items-center justify-between p-2 bg-slate-800/30 rounded">
-                  <span className="text-sm">{signal}</span>
-                  <div className="flex items-center space-x-2">
-                    <div className="w-24 h-2 bg-slate-700 rounded-full overflow-hidden">
-                      <div 
-                        className="h-full bg-gradient-to-r from-blue-500 to-purple-500 rounded-full"
-                        style={{ width: `${(count / data.totalRequests) * 100}%` }}
-                      />
+          {/* Geographic Distribution */}
+          {data.global_stats?.topCountries && (
+            <div className="mb-6">
+              <h4 className="font-medium mb-3 flex items-center">
+                <Map className="w-4 h-4 mr-2 text-blue-500" />
+                Top Countries
+              </h4>
+              <div className="space-y-2">
+                {Object.entries(data.global_stats.topCountries).map(([country, count]: [string, any]) => (
+                  <div key={country} className="flex items-center justify-between p-2 bg-slate-800/30 rounded">
+                    <span className="text-sm">{country}</span>
+                    <div className="flex items-center space-x-2">
+                      <div className="w-24 h-2 bg-slate-700 rounded-full overflow-hidden">
+                        <div 
+                          className="h-full bg-gradient-to-r from-blue-500 to-purple-500 rounded-full"
+                          style={{ width: `${(count / data.totalRequests) * 100}%` }}
+                        />
+                      </div>
+                      <span className="text-sm font-medium w-8 text-right">{count}</span>
                     </div>
-                    <span className="text-sm font-medium w-8 text-right">{count}</span>
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Top Errors */}
-          <div>
-            <h4 className="font-medium mb-3 flex items-center">
-              <AlertTriangle className="w-4 h-4 mr-2 text-orange-500" />
-              Top 5 Validation Errors
-            </h4>
-            <div className="space-y-2">
-              {data.global_stats.top_errors.map((error: string, index: number) => (
-                <div key={index} className="flex items-center space-x-3 p-2 bg-red-500/5 border border-red-500/20 rounded">
-                  <span className="text-red-400 font-medium text-sm">#{index + 1}</span>
-                  <span className="text-sm flex-1">{error}</span>
-                </div>
-              ))}
+          {data.global_stats?.topErrors && (
+            <div>
+              <h4 className="font-medium mb-3 flex items-center">
+                <AlertTriangle className="w-4 h-4 mr-2 text-orange-500" />
+                Top 5 Validation Errors
+              </h4>
+              <div className="space-y-2">
+                {data.global_stats.topErrors.map((error: string, index: number) => (
+                  <div key={index} className="flex items-center space-x-3 p-2 bg-red-500/5 border border-red-500/20 rounded">
+                    <span className="text-red-400 font-medium text-sm">#{index + 1}</span>
+                    <span className="text-sm flex-1">{error}</span>
+                  </div>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
         </div>
       </Card>
 
-      {/* Filters Card */}
+      {/* Advanced Filters Card */}
       <Card className="gradient-card border-slate-700/50 slide-up">
         <div className="p-6">
           <h3 className="text-lg font-semibold mb-4 flex items-center">

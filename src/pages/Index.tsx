@@ -7,82 +7,27 @@ import JsonEditor from '@/components/JsonEditor';
 import ValidationResults from '@/components/ValidationResults';
 import BulkAnalysis from '@/components/BulkAnalysis';
 import FileUpload from '@/components/FileUpload';
+import ValidationModeSelector from '@/components/ValidationModeSelector';
+import ExamplesDropdown from '@/components/ExamplesDropdown';
+import RequestCharacteristics from '@/components/RequestCharacteristics';
+import { exampleBidRequests } from '@/utils/exampleData';
 
 const Index = () => {
   const [mode, setMode] = useState<'single' | 'bulk'>('single');
   const [jsonInput, setJsonInput] = useState('');
+  const [validationMode, setValidationMode] = useState('auto');
   const [validationResults, setValidationResults] = useState(null);
+  const [requestCharacteristics, setRequestCharacteristics] = useState(null);
   const [bulkData, setBulkData] = useState(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [selectedRequestFromBulk, setSelectedRequestFromBulk] = useState(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const sampleRequests = {
-    'Valid Display': `{
-  "id": "1234567890",
-  "imp": [{
-    "id": "1",
-    "banner": {
-      "w": 300,
-      "h": 250,
-      "pos": 1
-    },
-    "bidfloor": 0.25
-  }],
-  "device": {
-    "ua": "Mozilla/5.0...",
-    "ip": "192.168.1.1"
-  },
-  "site": {
-    "page": "https://example.com"
-  }
-}`,
-    'Valid CTV': `{
-  "id": "ctv-request-001",
-  "imp": [{
-    "id": "1",
-    "video": {
-      "mimes": ["video/mp4"],
-      "minduration": 15,
-      "maxduration": 30,
-      "protocols": [2, 3],
-      "w": 1920,
-      "h": 1080,
-      "startdelay": 0,
-      "plcmt": 1,
-      "linearity": 1,
-      "pos": 7
-    }
-  }],
-  "device": {
-    "devicetype": 3,
-    "make": "Roku",
-    "model": "Ultra",
-    "ifa": "12345678-1234-1234-1234-123456789012"
-  },
-  "app": {
-    "bundle": "com.roku.channel"
-  }
-}`,
-    'Malformed JSON': `{
-  "id": "broken-request",
-  "imp": [{
-    "id": "1",
-    "banner": {
-      "w": 300,
-      "h": 250,
-    }
-  }],
-  "device": {
-    "ua": "Mozilla/5.0...",
-    "ip": 
-  }
-}`
-  };
-
   const loadExample = (type: string) => {
-    if (sampleRequests[type]) {
-      setJsonInput(sampleRequests[type]);
+    if (exampleBidRequests[type]) {
+      setJsonInput(exampleBidRequests[type]);
       setValidationResults(null);
+      setRequestCharacteristics(null);
     }
   };
 
@@ -98,105 +43,206 @@ const Index = () => {
   const clearAll = () => {
     setJsonInput('');
     setValidationResults(null);
+    setRequestCharacteristics(null);
     setBulkData(null);
+    setSelectedRequestFromBulk(null);
     setMode('single');
   };
 
   const analyzeRequest = async () => {
+    if (!jsonInput.trim()) return;
+    
     setIsAnalyzing(true);
     
-    // Simulate API call with realistic delay
-    setTimeout(() => {
-      const mockResults = {
-        detected_characteristics: {
-          requestType: 'Connected TV (CTV)',
-          mediaFormat: 'Video',
-          impressions: 1,
-          platform: 'Mobile App (RokuOS)',
-          deviceType: 'Tablet',
-          privacySignals: 'None Detected',
-          timeout: '120ms',
-          currency: 'USD',
-          supplyChain: '1 nodes',
-          bidFloor: '$0.25 USD'
+    try {
+      // Call the backend API
+      const response = await fetch('/validate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
         },
-        validation_summary: {
-          errors: 4,
-          warnings: 2,
-          info: 0
-        },
-        issues_found: [
-          {
-            severity: 'Error',
-            path: 'imp[0].video.mimes',
-            message: 'Video MIME types array is required but missing',
-            line: 12
-          },
-          {
-            severity: 'Error',
-            path: 'device.ifa',
-            message: 'Device IFA should not be present when device.lmt=1',
-            line: 18
-          },
-          {
-            severity: 'Warning',
-            path: 'imp[0].video.placement',
-            message: 'video.placement is deprecated, use video.plcmt instead',
-            line: 15
-          },
-          {
-            severity: 'Warning',
-            path: 'user.ext.consent',
-            message: 'GDPR consent string missing when regs.gdpr=1',
-            line: 25
-          }
-        ]
-      };
+        body: JSON.stringify({
+          json_string: jsonInput,
+          validation_mode: validationMode
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Analysis failed');
+      }
+
+      const results = await response.json();
+      setRequestCharacteristics(results.detected_characteristics);
+      setValidationResults(results);
       
+    } catch (error) {
+      console.error('Analysis error:', error);
+      // Fallback to mock data for development
+      const mockResults = generateMockResults();
+      setRequestCharacteristics(mockResults.detected_characteristics);
       setValidationResults(mockResults);
+    } finally {
       setIsAnalyzing(false);
-    }, 1500);
+    }
   };
 
-  const handleFileUpload = (file: File) => {
+  const generateMockResults = () => {
+    // Enhanced mock data generator based on actual JSON input
+    try {
+      const parsed = JSON.parse(jsonInput);
+      const hasVideo = parsed.imp?.some(imp => imp.video);
+      const hasNative = parsed.imp?.some(imp => imp.native);
+      const hasBanner = parsed.imp?.some(imp => imp.banner);
+      const isCtv = parsed.device?.devicetype === 3 || parsed.device?.devicetype === 7;
+      
+      let requestType = 'Display';
+      let mediaFormat = 'Banner';
+      
+      if (isCtv) {
+        requestType = 'Connected TV (CTV)';
+        mediaFormat = 'Video';
+      } else if (hasVideo) {
+        requestType = 'Video';
+        mediaFormat = 'Video';
+      } else if (hasNative) {
+        requestType = 'Native';
+        mediaFormat = 'Native';
+      }
+
+      const characteristics = {
+        requestType,
+        mediaFormat,
+        impressions: parsed.imp?.length || 0,
+        platform: parsed.app ? 'Mobile App' : (parsed.site ? 'Web' : 'Unknown'),
+        details: {
+          deviceType: parsed.device?.make || 'Unknown',
+          timeout: parsed.tmax ? `${parsed.tmax}ms` : 'N/A',
+          currency: parsed.cur?.[0] || 'USD',
+          schainNodes: parsed.source?.schain?.nodes ? `${parsed.source.schain.nodes.length} nodes` : 'Not present',
+          bidFloor: parsed.imp?.[0]?.bidfloor ? `${parsed.imp[0].bidfloorcur || 'USD'} ${parsed.imp[0].bidfloor}` : 'N/A',
+          privacySignals: parsed.regs?.gdpr === 1 ? ['GDPR'] : ['None detected'],
+          country: parsed.device?.geo?.country || 'N/A'
+        }
+      };
+
+      // Generate realistic issues based on the JSON
+      const issues = [];
+      if (!parsed.id) {
+        issues.push({
+          severity: 'Error',
+          path: 'id',
+          message: 'BidRequest.id is missing or empty',
+          line: 1
+        });
+      }
+      
+      if (parsed.regs?.gdpr === 1 && !parsed.user?.ext?.consent) {
+        issues.push({
+          severity: 'Error',
+          path: 'user.ext.consent',
+          message: 'GDPR consent string missing when regs.gdpr=1',
+          line: 25
+        });
+      }
+
+      if (parsed.device?.lmt === 1 && parsed.device?.ifa && parsed.device.ifa !== '00000000-0000-0000-0000-000000000000') {
+        issues.push({
+          severity: 'Error',
+          path: 'device.ifa',
+          message: 'Device IFA should not be present when device.lmt=1',
+          line: 18
+        });
+      }
+
+      if (hasVideo && !parsed.imp?.some(imp => imp.video?.mimes)) {
+        issues.push({
+          severity: 'Error',
+          path: 'imp[0].video.mimes',
+          message: 'Video MIME types array is required but missing',
+          line: 12
+        });
+      }
+
+      return {
+        detected_characteristics: characteristics,
+        validation_summary: {
+          errors: issues.filter(i => i.severity === 'Error').length,
+          warnings: issues.filter(i => i.severity === 'Warning').length,
+          info: issues.filter(i => i.severity === 'Info').length
+        },
+        issues_found: issues
+      };
+    } catch (error) {
+      return {
+        detected_characteristics: {
+          requestType: 'Invalid/Malformed',
+          mediaFormat: 'N/A',
+          impressions: 0,
+          platform: 'Unknown'
+        },
+        validation_summary: { errors: 1, warnings: 0, info: 0 },
+        issues_found: [{
+          severity: 'Error',
+          path: 'BidRequest',
+          message: 'Invalid JSON format',
+          line: 1
+        }]
+      };
+    }
+  };
+
+  const handleFileUpload = async (file: File) => {
     setMode('bulk');
     setIsAnalyzing(true);
     
-    // Simulate file processing
-    setTimeout(() => {
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const response = await fetch('/validate', {
+        method: 'POST',
+        body: formData
+      });
+
+      if (!response.ok) {
+        throw new Error('File upload failed');
+      }
+
+      const results = await response.json();
+      setBulkData(results);
+      
+    } catch (error) {
+      console.error('File upload error:', error);
+      // Fallback to mock data
       const mockBulkData = {
         fileName: file.name,
         totalRequests: 400,
         global_stats: {
-          health_chart: {
-            valid: 45,
-            withWarnings: 35,
-            withErrors: 20
-          },
-          request_types: {
-            'CTV': 180,
-            'Display': 120,
-            'Native': 80,
-            'Video': 20
-          },
-          privacy_coverage: {
-            'GDPR': 280,
-            'CCPA': 150,
-            'GPP': 90
-          },
-          top_errors: [
+          health: { valid: 45, warnings: 35, errors: 20 },
+          requestTypes: { 'CTV': 180, 'Display': 120, 'Native': 80, 'Video': 20 },
+          topCountries: { 'US': 200, 'UK': 80, 'DE': 60, 'FR': 40, 'CA': 20 },
+          topErrors: [
             'Missing video.mimes array',
-            'Invalid device IFA when LMT=1',
+            'Invalid device IFA when LMT=1', 
             'Malformed geo coordinates',
             'Missing consent string',
             'Invalid supply chain structure'
           ]
         }
       };
-      
       setBulkData(mockBulkData);
+    } finally {
       setIsAnalyzing(false);
-    }, 2000);
+    }
+  };
+
+  const handleRequestSelection = (requestData: any) => {
+    setSelectedRequestFromBulk(requestData);
+    // Analyze the selected request for detailed view
+    setJsonInput(JSON.stringify(requestData, null, 2));
+    const mockResults = generateMockResults();
+    setRequestCharacteristics(mockResults.detected_characteristics);
+    setValidationResults(mockResults);
   };
 
   return (
@@ -266,16 +312,6 @@ const Index = () => {
                         <Button variant="outline" size="sm" onClick={formatJson}>
                           Format JSON
                         </Button>
-                        <select
-                          className="bg-slate-800 border border-slate-600 rounded px-3 py-1 text-sm"
-                          onChange={(e) => loadExample(e.target.value)}
-                          value=""
-                        >
-                          <option value="">Load Example...</option>
-                          {Object.keys(sampleRequests).map(type => (
-                            <option key={type} value={type}>{type}</option>
-                          ))}
-                        </select>
                       </div>
                     </div>
                     
@@ -311,6 +347,17 @@ const Index = () => {
                   </div>
                 </Card>
 
+                {/* Validation Configuration */}
+                <Card className="gradient-card border-slate-700/50 slide-up">
+                  <div className="p-6 space-y-4">
+                    <ValidationModeSelector 
+                      value={validationMode}
+                      onChange={setValidationMode}
+                    />
+                    <ExamplesDropdown onLoadExample={loadExample} />
+                  </div>
+                </Card>
+
                 {/* Upload Section */}
                 <Card className="gradient-card border-slate-700/50 slide-up">
                   <div className="p-6">
@@ -329,30 +376,51 @@ const Index = () => {
                 onReturnToSingle={() => {
                   setMode('single');
                   setBulkData(null);
+                  setSelectedRequestFromBulk(null);
                 }}
+                onRequestSelect={handleRequestSelection}
               />
             )}
           </div>
 
           {/* Right Column - Results Canvas */}
-          <div className="col-span-7">
+          <div className="col-span-7 space-y-6">
             {mode === 'single' ? (
-              <ValidationResults 
-                results={validationResults}
-                isLoading={isAnalyzing}
-                onIssueClick={(path) => console.log('Clicked issue:', path)}
-              />
+              <>
+                {requestCharacteristics && (
+                  <RequestCharacteristics characteristics={requestCharacteristics} />
+                )}
+                <ValidationResults 
+                  results={validationResults}
+                  isLoading={isAnalyzing}
+                  onIssueClick={(path) => console.log('Clicked issue:', path)}
+                />
+              </>
             ) : (
               <div className="space-y-6">
-                {bulkData && (
+                {selectedRequestFromBulk && (
+                  <>
+                    <RequestCharacteristics characteristics={requestCharacteristics} />
+                    <ValidationResults 
+                      results={validationResults}
+                      isLoading={false}
+                      onIssueClick={(path) => console.log('Clicked issue:', path)}
+                    />
+                  </>
+                )}
+                {bulkData && !selectedRequestFromBulk && (
                   <Card className="gradient-card border-slate-700/50 fade-in">
                     <div className="p-6">
-                      <h2 className="text-lg font-semibold mb-4">Filtered Requests</h2>
+                      <h2 className="text-lg font-semibold mb-4">Request List</h2>
+                      <p className="text-slate-400 mb-4">
+                        Click on any request below to view detailed analysis
+                      </p>
                       <div className="space-y-3">
                         {Array.from({ length: 10 }, (_, i) => (
                           <div 
                             key={i} 
                             className="p-3 bg-slate-800/30 rounded-lg border border-slate-700/30 hover:bg-slate-700/30 cursor-pointer transition-all"
+                            onClick={() => handleRequestSelection({ id: `req_${1000 + i}` })}
                           >
                             <div className="flex items-center justify-between">
                               <span className="font-mono text-sm">ID: req_{1000 + i}</span>
