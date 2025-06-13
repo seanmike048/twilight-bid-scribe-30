@@ -1,25 +1,21 @@
 
-// FILE: src/pages/Index.tsx
-
 import { useState, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { toast } from 'sonner';
-import { Play, Trash2, Eye, CheckCircle, XCircle } from 'lucide-react';
+import { Play, Trash2, Eye, CheckCircle, XCircle, BarChart3 } from 'lucide-react';
 import { analyzer, AnalysisResult, ValidationIssue } from '@/lib/analyzer';
 import { exampleBidRequests } from '@/lib/exampleData';
 
-// --- UI SUB-COMPONENTS (Self-Contained for clarity) ---
+// --- UI SUB-COMPONENTS ---
 
 const Header = ({ mode, setMode }: { mode: string, setMode: (m: 'single' | 'bulk') => void }) => (
     <header className="flex justify-between items-center mb-8">
         <div className="flex items-center space-x-4">
             <div className="flex items-center space-x-3">
                 <div className="w-10 h-10 rounded-lg bg-slate-800 border border-slate-700 flex items-center justify-center">
-                    <svg className="w-6 h-6 text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                    </svg>
+                    <BarChart3 className="w-6 h-6 text-orange-400" />
                 </div>
                 <div>
                     <h1 className="text-xl font-bold text-white">BABE Verificator</h1>
@@ -46,12 +42,12 @@ const Header = ({ mode, setMode }: { mode: string, setMode: (m: 'single' | 'bulk
 
 const JsonEditor = ({ jsonText, onTextChange }: { jsonText: string; onTextChange: (text: string) => void }) => {
     return (
-        <div className="relative bg-slate-900 rounded-lg border border-slate-700 focus-within:border-orange-500 focus-within:ring-1 focus-within:ring-orange-500/50 transition-all">
+        <div className="relative bg-slate-900 rounded-lg border border-slate-700 focus-within:border-orange-500 focus-within:ring-1 focus-within:ring-orange-500/50 transition-all h-[400px] lg:h-[500px]">
             <textarea
                 value={jsonText}
                 onChange={(e) => onTextChange(e.target.value)}
                 placeholder="Paste your OpenRTB bid request here..."
-                className="w-full h-full min-h-[400px] lg:min-h-[500px] p-4 font-mono text-sm bg-transparent rounded-md focus:outline-none text-slate-300 resize-none"
+                className="w-full h-full p-4 font-mono text-sm bg-transparent rounded-md focus:outline-none text-slate-300 resize-none overflow-y-auto"
                 spellCheck="false"
             />
         </div>
@@ -59,11 +55,15 @@ const JsonEditor = ({ jsonText, onTextChange }: { jsonText: string; onTextChange
 };
 
 const ResultsPanel = ({ analysis, issues, isLoading }: { analysis: AnalysisResult | null; issues: ValidationIssue[]; isLoading: boolean }) => {
+    const [issueFilter, setIssueFilter] = useState<'All' | 'Error' | 'Warning' | 'Info'>('All');
+    
     const severityClasses = {
         Error: "border-red-500 bg-red-900/20 text-red-400",
         Warning: "border-orange-500 bg-orange-900/20 text-orange-400",
         Info: "border-blue-500 bg-blue-900/20 text-blue-400"
     };
+
+    const filteredIssues = issueFilter === 'All' ? issues : issues.filter(issue => issue.severity === issueFilter);
 
     if (isLoading) {
         return (
@@ -101,23 +101,44 @@ const ResultsPanel = ({ analysis, issues, isLoading }: { analysis: AnalysisResul
                 <CardContent className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
                     <div><p className="text-slate-400">Request Type</p><p className="font-bold text-lg text-orange-400">{analysis.requestType}</p></div>
                     <div><p className="text-slate-400">Impressions</p><p className="font-bold text-lg text-white">{analysis.impressions}</p></div>
-                    <div><p className="text-slate-400">Media Formats</p><p className="font-bold text-white">{analysis.mediaFormats.join(', ')}</p></div>
+                    <div><p className="text-slate-400">Media Formats</p><p className="font-bold text-white">{analysis.mediaFormats.join(', ') || 'N/A'}</p></div>
                     <div><p className="text-slate-400">Platform</p><p className="font-bold text-white">{analysis.platform}</p></div>
                     <div><p className="text-slate-400">Device Type</p><p className="font-bold text-white">{analysis.deviceType}</p></div>
                     <div><p className="text-slate-400">Geography</p><p className="font-bold text-white">{analysis.geo}</p></div>
                 </CardContent>
             </Card>
             <Card className="bg-slate-900 border-slate-800">
-                 <CardHeader><CardTitle className="text-lg text-white">Validation Summary</CardTitle></CardHeader>
+                 <CardHeader>
+                    <div className="flex items-center justify-between">
+                        <CardTitle className="text-lg text-white">Validation Summary</CardTitle>
+                        <div className="flex items-center space-x-2">
+                            {['All', 'Error', 'Warning', 'Info'].map(filter => (
+                                <Button
+                                    key={filter}
+                                    variant={issueFilter === filter ? "default" : "outline"}
+                                    size="sm"
+                                    onClick={() => setIssueFilter(filter as any)}
+                                    className="text-xs"
+                                >
+                                    {filter} ({filter === 'All' ? issues.length : issues.filter(i => i.severity === filter).length})
+                                </Button>
+                            ))}
+                        </div>
+                    </div>
+                 </CardHeader>
                  <CardContent>
-                    {issues.length === 0 ? (
-                        <div className="text-center py-4 text-green-400 flex items-center justify-center"><CheckCircle className="mr-2"/>No issues found.</div>
+                    {filteredIssues.length === 0 ? (
+                        <div className="text-center py-4 text-green-400 flex items-center justify-center">
+                            <CheckCircle className="mr-2"/>
+                            {issueFilter === 'All' ? 'No issues found.' : `No ${issueFilter.toLowerCase()} issues found.`}
+                        </div>
                     ) : (
                         <ul className="space-y-2 max-h-64 overflow-y-auto pr-2">
-                            {issues.map((issue, i) => (
+                            {filteredIssues.map((issue, i) => (
                                 <li key={i} className={`text-sm p-3 rounded-md border-l-4 ${severityClasses[issue.severity]}`}>
                                     <p className="font-semibold text-white">{issue.message}</p>
                                     <p className="text-slate-400 font-mono text-xs mt-1">Path: {issue.path}</p>
+                                    {issue.expected && <p className="text-slate-500 text-xs mt-1">Expected: {issue.expected}</p>}
                                 </li>
                             ))}
                         </ul>
@@ -128,7 +149,6 @@ const ResultsPanel = ({ analysis, issues, isLoading }: { analysis: AnalysisResul
     );
 };
 
-
 // --- MAIN APP COMPONENT ---
 export default function IndexPage() {
     const [mode, setMode] = useState<'single' | 'bulk'>('single');
@@ -137,21 +157,25 @@ export default function IndexPage() {
     const [issues, setIssues] = useState<ValidationIssue[]>([]);
     const [isLoading, setIsLoading] = useState(false);
 
-    const handleAnalyze = useCallback(() => {
+    const handleAnalyze = useCallback(async () => {
         if (!jsonText.trim()) {
             toast.error("Input is empty. Please paste a bid request.");
             return;
         }
         setIsLoading(true);
-        // Simulate analysis delay for UX
+        
+        // Simulate processing time for better UX
         setTimeout(() => {
             const { analysis, issues } = analyzer.analyze(jsonText);
             setAnalysisResult(analysis);
             setIssues(issues);
             setIsLoading(false);
+            
             if(analysis && !analysis.error) {
+                const errorCount = issues.filter(i => i.severity === 'Error').length;
+                const warningCount = issues.filter(i => i.severity === 'Warning').length;
                 toast.success("Analysis complete!", {
-                    description: `${issues.length} issue(s) found.`
+                    description: `Found ${errorCount} errors and ${warningCount} warnings.`
                 });
             } else {
                 toast.error(analysis?.error || "An unknown analysis error occurred.");
@@ -163,13 +187,14 @@ export default function IndexPage() {
         setJsonText(exampleBidRequests[key]);
         setAnalysisResult(null);
         setIssues([]);
+        toast.info(`Loaded ${key} example`);
     }, []);
 
     const handleFormat = useCallback(() => {
         try {
             const parsed = JSON.parse(jsonText);
             setJsonText(JSON.stringify(parsed, null, 2));
-            toast.info("JSON has been formatted.");
+            toast.success("JSON has been formatted.");
         } catch {
             toast.error("Cannot format invalid JSON.");
         }
@@ -179,8 +204,8 @@ export default function IndexPage() {
         setJsonText('');
         setAnalysisResult(null);
         setIssues([]);
+        toast.info("Input cleared.");
     }, []);
-
 
     return (
         <div className="min-h-screen bg-[#0c111d] text-slate-200">

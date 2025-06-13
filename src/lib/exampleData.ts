@@ -1,6 +1,4 @@
 
-// FILE: src/lib/exampleData.ts
-
 export const exampleBidRequests: Record<string, string> = {
   'valid-ctv': `{
   "id": "ctv-request-001",
@@ -87,7 +85,9 @@ export const exampleBidRequests: Record<string, string> = {
     "ifa": "12345678-1234-1234-1234-123456789012",
     "lmt": 1
   },
-  "site": { "page": "https://example.com" }
+  "site": { "page": "https://example.com" },
+  "regs": { "gdpr": 1 },
+  "user": {}
 }`,
   'malformed-json': `{
   "id": "broken-request",
