@@ -162,7 +162,22 @@ export default function IndexPage() {
                 dispatch({ type: 'SET_BULK_DATA', payload: { fileName: file.name, requests } });
                 toast.success(`${requests.length} requests loaded from ${file.name}`);
             } catch (e) {
-                 dispatch({ type: 'SET_SINGLE_RESULT', payload: { analysis: { error: 'Failed to parse log file. Ensure it contains one valid JSON per line.', requestType: "Error", mediaFormats: [], impressions: 0, platform: "", deviceType: "", geo: "" }, issues: [] } });
+                 dispatch({ type: 'SET_SINGLE_RESULT', payload: { 
+                     analysis: { 
+                         summary: {
+                             requestType: 'Unknown', 
+                             mediaFormats: [], 
+                             impressions: 0, 
+                             platform: 'Unknown', 
+                             deviceType: 'Unknown', 
+                             geo: 'N/A'
+                         },
+                         issues: [],
+                         request: undefined,
+                         error: 'Failed to parse log file. Ensure it contains one valid JSON per line.'
+                     }, 
+                     issues: [] 
+                 } });
             }
         };
         reader.readAsText(file);

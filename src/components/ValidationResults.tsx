@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -54,12 +55,12 @@ export const ValidationResults: React.FC<Props> = ({ analysis, issues, isLoading
           <Card className="bg-slate-900 border-slate-800">
               <CardHeader><CardTitle className="text-lg text-white">Bid Request Analysis</CardTitle></CardHeader>
               <CardContent className="grid grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-4 text-sm">
-                  <div><p className="text-slate-400">Request Type</p><p className="font-bold text-lg text-orange-400">{analysis.requestType}</p></div>
-                  <div><p className="text-slate-400">Impressions</p><p className="font-bold text-lg text-white">{analysis.impressions}</p></div>
-                  <div><p className="text-slate-400">Media Formats</p><p className="font-bold text-white">{analysis.mediaFormats.join(', ')}</p></div>
-                  <div><p className="text-slate-400">Platform</p><p className="font-bold text-white">{analysis.platform}</p></div>
-                  <div><p className="text-slate-400">Device Type</p><p className="font-bold text-white">{analysis.deviceType}</p></div>
-                  <div><p className="text-slate-400">Geography</p><p className="font-bold text-white">{analysis.geo}</p></div>
+                  <div><p className="text-slate-400">Request Type</p><p className="font-bold text-lg text-orange-400">{analysis.summary.requestType}</p></div>
+                  <div><p className="text-slate-400">Impressions</p><p className="font-bold text-lg text-white">{analysis.summary.impressions}</p></div>
+                  <div><p className="text-slate-400">Media Formats</p><p className="font-bold text-white">{analysis.summary.mediaFormats.join(', ')}</p></div>
+                  <div><p className="text-slate-400">Platform</p><p className="font-bold text-white">{analysis.summary.platform}</p></div>
+                  <div><p className="text-slate-400">Device Type</p><p className="font-bold text-white">{analysis.summary.deviceType}</p></div>
+                  <div><p className="text-slate-400">Geography</p><p className="font-bold text-white">{analysis.summary.geo}</p></div>
               </CardContent>
           </Card>
 

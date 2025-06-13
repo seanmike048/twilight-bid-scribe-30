@@ -12,11 +12,23 @@ interface BulkAnalysisProps {
 }
 
 export const BulkAnalysis: React.FC<BulkAnalysisProps> = ({ fileName, data, onRequestSelect }) => {
-    // In a real app, this analysis would be more sophisticated or passed as props
+    // Calculate stats by analyzing each request
+    const requestStats = data.map(req => {
+        const { issues } = analyzer.analyze(JSON.stringify(req));
+        return {
+            errors: issues.filter(i => i.severity === 'Error').length,
+            warnings: issues.filter(i => i.severity === 'Warning').length,
+            hasIssues: issues.length > 0
+        };
+    });
+
     const stats = {
         totalRequests: data.length,
-        health: { valid: data.filter(r => analyzer.analyze(JSON.stringify(r)).issues.length === 0).length, errors: data.filter(r => analyzer.analyze(JSON.stringify(r)).issues.length > 0).length, warnings: 0 },
-        // Add more stats calculation here as needed
+        health: { 
+            valid: requestStats.filter(s => !s.hasIssues).length,
+            errors: requestStats.filter(s => s.errors > 0).length,
+            warnings: requestStats.filter(s => s.warnings > 0 && s.errors === 0).length
+        }
     };
 
     return (
