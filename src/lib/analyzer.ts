@@ -1,15 +1,16 @@
 /**
+ * src/lib/analyzer.ts
+ * ------------------
  * Comprehensive OpenRTB Bid Request Analyser
  * ------------------------------------------
- * Implements a modular rule‑engine capable of validating bid requests
- * against OpenRTB 2.6 (living standard) plus selected partner‑specific
- * constraints.  Rules are organised in arrays so new ones can be added
- * by simply pushing to the collection.
+ * Implements a modular, extensible rule-engine for validating bid requests
+ * against OpenRTB 2.6 (living spec) plus partner-specific constraints.
  *
- * ✱  No runtime dependencies.
- * ✱  Stateless rule objects – pure predicate functions.
- * ✱  Automatic inventory‑type & partner detection.
- * ✱  Memoised results so identical JSON strings never pay the cost twice.
+ * Features:
+ *  - No runtime dependencies.
+ *  - Pure predicate-based rule objects.
+ *  - Automatic inventory-type & partner detection.
+ *  - Memoised parsing & analysis for idempotent performance.
  */
 
 export enum Severity {
@@ -50,17 +51,17 @@ export interface AnalysisResult {
 }
 
 export interface AnalyseOptions {
-  /** Force‑enable CTV context (otherwise auto‑detect) */
+  /** Force CTV context (overrides auto-detect) */
   forceCTV?: boolean;
-  /** Force partner profile (otherwise auto) */
+  /** Partner profile, e.g. 'sharethrough' */
   partnerProfile?: 'sharethrough';
 }
 
 interface Context {
-  inventoryTypes: Set<'banner' | 'video' | 'audio' | 'native' | 'dooh'>;
+  root: any;
+  inventory: Set<'banner' | 'video' | 'audio' | 'native' | 'dooh'>;
   isCTV: boolean;
   partnerProfile?: 'sharethrough';
-  root: any;
 }
 
 interface Rule {
@@ -69,10 +70,13 @@ interface Rule {
   severity: Severity;
   path?: string;
   specRef?: string;
-  applies?: (ctx: Context) => boolean; // default = always true
+  /** Whether this rule applies in the given context. */
+  applies?: (ctx: Context) => boolean;
+  /** Returns true if valid. */
   validate: (ctx: Context) => boolean;
 }
 
+// Device type mapping (OpenRTB 2.5/2.6)
 const DEVICE_TYPE: Record<number, AnalysisSummary['deviceType']> = {
   1: 'Mobile/Tablet',
   2: 'PC',
@@ -83,259 +87,294 @@ const DEVICE_TYPE: Record<number, AnalysisSummary['deviceType']> = {
   7: 'Set-top Box',
 };
 
-/* ------------------------------------------------------------ */
-/*               helpers (private to this module)               */
-/* ------------------------------------------------------------ */
+// parseCache: memoise by exact JSON text
+const parseCache = new Map<string, AnalysisResult>();
 
-function safeJsonParse<T = any>(txt: string): { ok: true; value: T } | { ok: false; error: Error } {
-  try {
-    return { ok: true, value: JSON.parse(txt) };
-  } catch (err) {
-    return { ok: false, error: err as Error };
-  }
+/** Safe JSON.parse wrapper */
+function safeJsonParse(txt: string) {
+  try { return { ok: true, value: JSON.parse(txt) }; }
+  catch (err) { return { ok: false, error: err as Error }; }
 }
 
-function findBidRequest(node: any): any | undefined {
-  if (!node || typeof node !== 'object') return undefined;
-  if ('id' in node && Array.isArray(node.imp)) return node;
-  for (const key of Object.keys(node)) {
-    const found = findBidRequest(node[key]);
-    if (found) return found;
+/** Recursively find the OpenRTB request object (root.id && imp[]) */
+function findBidRequest(obj: any): any | null {
+  if (obj && typeof obj === 'object') {
+    if (typeof obj.id === 'string' && Array.isArray(obj.imp)) return obj;
+    for (const key of Object.keys(obj)) {
+      const found = findBidRequest(obj[key]);
+      if (found) return found;
+    }
   }
-  return undefined;
+  return null;
 }
 
-const isNonEmptyString = (v: any): v is string => typeof v === 'string' && v.trim().length > 0;
+const isString = (v: any): v is string => typeof v === 'string';
+const isNonEmptyString = (v: any): v is string => isString(v) && v.trim() !== '';
 
-/* ------------------------------------------------------------ */
-/*                         rule lists                           */
-/* ------------------------------------------------------------ */
+/* ------------------------------------------------------------------ */
+/*                          RULE DEFINITIONS                          */
+/* ------------------------------------------------------------------ */
 
 const coreRules: Rule[] = [
   {
-    id: 'bidrequest-id',
-    description: 'BidRequest.id must be a non‑empty string',
+    id: 'missing-request',
+    description: 'No valid OpenRTB bid request found.',
     severity: Severity.ERROR,
-    path: 'id',
-    specRef: 'OpenRTB\u00A02.6\u00A0\u00A73.2.1',
-    validate: ({ root }) => isNonEmptyString(root?.id),
+    validate: ({ root }) => !!root,
   },
   {
-    id: 'imp-array',
-    description: 'BidRequest.imp must be a non‑empty array',
+    id: 'id-required',
+    description: 'BidRequest.id must be a non-empty string.',
+    severity: Severity.ERROR,
+    path: 'id',
+    specRef: 'OpenRTB 2.6 §3.2.1',
+    applies: ({ root }) => !!root,
+    validate: ({ root }) => isNonEmptyString(root.id),
+  },
+  {
+    id: 'imp-required',
+    description: 'BidRequest.imp array must have at least one impression.',
     severity: Severity.ERROR,
     path: 'imp',
-    specRef: 'OpenRTB\u00A02.6\u00A0\u00A73.2.1',
-    validate: ({ root }) => Array.isArray(root?.imp) && root.imp.length > 0,
+    specRef: 'OpenRTB 2.6 §3.2.1',
+    applies: ({ root }) => !!root,
+    validate: ({ root }) => Array.isArray(root.imp) && root.imp.length > 0,
   },
   {
     id: 'app-site-xor',
-    description: 'Exactly one of BidRequest.app or BidRequest.site must be present',
+    description: 'Exactly one of BidRequest.app or BidRequest.site must be present.',
     severity: Severity.ERROR,
-    path: '',
-    specRef: 'OpenRTB\u00A02.6\u00A0\u00A73.2.1',
-    validate: ({ root }) =>
-      Boolean(root) && ((root.app && !root.site) || (!root.app && root.site)),
+    specRef: 'OpenRTB 2.6 §3.2.1',
+    applies: ({ root }) => !!root,
+    validate: ({ root }) => Boolean((root.app && !root.site) || (!root.app && root.site)),
   },
   {
     id: 'device-recommended',
-    description: 'Device object missing – highly recommended for accurate targeting',
+    description: 'Device object is recommended for targeting; its absence limits functionality.',
     severity: Severity.WARNING,
     path: 'device',
-    specRef: 'OpenRTB\u00A02.6\u00A0\u00A73.2.18',
+    specRef: 'OpenRTB 2.6 §3.2.18',
+    applies: ({ root }) => !!root,
     validate: ({ root }) => !!root.device,
   },
   {
     id: 'device-ua-ip',
-    description: 'Device should carry at least ip/ipv6 or ua/sua',
+    description: 'Device should include ip/ipv6 or ua/sua for device identification.',
     severity: Severity.WARNING,
     path: 'device',
-    specRef: 'OpenRTB\u00A02.6\u00A0\u00A73.2.18',
+    specRef: 'OpenRTB 2.6 §3.2.18',
+    applies: ({ root }) => !!root.device,
     validate: ({ root }) => {
       const d = root.device;
       return !!(
-        d &&
-        (isNonEmptyString(d.ip) ||
-          isNonEmptyString(d.ipv6) ||
-          isNonEmptyString(d.ua) ||
-          d.sua)
+        isNonEmptyString(d.ip) || isNonEmptyString(d.ipv6) ||
+        isNonEmptyString(d.ua) || d.sua
       );
     },
   },
   {
-    id: 'user-recommended',
-    description: 'User object is recommended – its absence limits frequency & user‑level targeting',
-    severity: Severity.WARNING,
-    path: 'user',
-    specRef: 'OpenRTB\u00A02.6\u00A0\u00A73.2.20',
-    validate: ({ root }) => !!root.user,
-  },
-  {
-    id: 'regs-gdpr-bool',
-    description: 'regs.gdpr must be 0 or 1 when present',
+    id: 'regs-gdpr',
+    description: 'If regs.gdpr is present, it must be 0 or 1.',
     severity: Severity.ERROR,
     path: 'regs.gdpr',
-    specRef: 'OpenRTB\u00A02.6\u00A0\u00A73.2.3',
-    validate: ({ root }) => {
-      if (root.regs && root.regs.gdpr !== undefined) {
-        return root.regs.gdpr === 0 || root.regs.gdpr === 1;
-      }
-      return true;
-    },
+    specRef: 'OpenRTB 2.6 §3.2.3',
+    applies: ({ root }) => !!root.regs,
+    validate: ({ root }) => root.regs.gdpr === 0 || root.regs.gdpr === 1,
   },
   {
-    id: 'gdpr-consent-required',
-    description: 'GDPR signalled (regs.gdpr=1) but user.ext.consent missing or empty',
+    id: 'gdpr-consent',
+    description: 'GDPR=1 but user.ext.consent is missing or empty.',
     severity: Severity.ERROR,
     path: 'user.ext.consent',
-    specRef: 'IAB\u00A0TCF\u00A0v2.x',
+    specRef: 'IAB TCF v2.x',
     applies: ({ root }) => root.regs?.gdpr === 1,
     validate: ({ root }) => isNonEmptyString(root.user?.ext?.consent),
-  },
-  {
-    id: 'us-privacy-format',
-    description: 'regs.us_privacy string format appears invalid',
-    severity: Severity.WARNING,
-    path: 'regs.us_privacy',
-    specRef: 'IAB\u00A0US\u00A0Privacy',
-    validate: ({ root }) =>
-      !root.regs?.us_privacy ||
-      /^[0-9YN\-]{4}$/.test(root.regs.us_privacy as string),
-  },
-  {
-    id: 'device-ifa-lmt',
-    description:
-      'device.lmt=1 implies device.ifa must be absent or “000…000”; real IFA leaked',
-    severity: Severity.ERROR,
-    path: 'device.ifa',
-    specRef: 'IAB\u00A0OTT\u00A0IFA\u00A0Guidelines\u00A0§2.3',
-    applies: ({ root }) => root.device?.lmt === 1,
-    validate: ({ root }) => {
-      const ifa = root.device?.ifa;
-      return (
-        !ifa ||
-        ifa === '00000000-0000-0000-0000-000000000000' ||
-        ifa === '00000000-0000-0000-0000-0000000000000000'
-      );
-    },
   },
 ];
 
 const bannerRules: Rule[] = [
   {
     id: 'banner-dimensions',
-    description:
-      'Each banner impression must define w/h or a non‑empty format array',
+    description: 'Banner impression must define w/h or a non-empty format array.',
     severity: Severity.ERROR,
     path: 'imp[].banner',
-    specRef: 'OpenRTB\u00A02.6\u00A0\u00A73.2.6',
-    applies: (ctx) => ctx.inventoryTypes.has('banner'),
-    validate: ({ root }) => {
-      return (root.imp as any[]).every((imp) => {
+    specRef: 'OpenRTB 2.6 §3.2.6',
+    applies: ({ inventory }) => inventory.has('banner'),
+    validate: ({ root }) =>
+      root.imp.every((imp: any) => {
         if (!imp.banner) return true;
         const b = imp.banner;
-        if (b.w && b.h) return true;
-        if (Array.isArray(b.format) && b.format.length > 0) {
-          return b.format.every((f: any) => f.w && f.h);
-        }
+        if (b.w > 0 && b.h > 0) return true;
+        if (Array.isArray(b.format) && b.format.length)
+          return b.format.every((f: any) => f.w > 0 && f.h > 0);
         return false;
-      });
-    },
+      }),
   },
 ];
 
 const videoRules: Rule[] = [
   {
     id: 'video-mimes',
-    description: 'Video.mimes must be a non‑empty array of MIME strings',
+    description: 'Video.mimes must be a non-empty array of strings.',
     severity: Severity.ERROR,
     path: 'imp[].video.mimes',
-    specRef: 'OpenRTB\u00A02.6\u00A0\u00A73.2.7',
-    applies: (ctx) => ctx.inventoryTypes.has('video'),
+    specRef: 'OpenRTB 2.6 §3.2.7',
+    applies: ({ inventory }) => inventory.has('video'),
     validate: ({ root }) =>
-      (root.imp as any[]).every(
-        (imp) =>
-          !imp.video ||
-          (Array.isArray(imp.video.mimes) && imp.video.mimes.length > 0),
-      ),
+      root.imp.every((imp: any) => !imp.video ||
+        (Array.isArray(imp.video.mimes) && imp.video.mimes.length > 0)),
   },
   {
-    id: 'video-duration-mutual-exclusive',
-    description:
-      'Video rqddurs is mutually exclusive with minduration/maxduration',
+    id: 'video-durations',
+    description: 'Video.rqddurs and minduration/maxduration are mutually exclusive.',
     severity: Severity.ERROR,
     path: 'imp[].video',
-    specRef: 'OpenRTB\u00A02.6\u00A0\u00A73.2.7',
-    applies: (ctx) => ctx.inventoryTypes.has('video'),
+    applies: ({ inventory }) => inventory.has('video'),
     validate: ({ root }) =>
-      (root.imp as any[]).every((imp) => {
+      root.imp.every((imp: any) => {
         if (!imp.video) return true;
         const v = imp.video;
-        const hasDur = v.minduration !== undefined || v.maxduration !== undefined;
-        const hasRq = Array.isArray(v.rqddurs) && v.rqddurs.length > 0;
-        return !(hasDur && hasRq);
+        const hasRange = v.minduration !== undefined || v.maxduration !== undefined;
+        const hasList = Array.isArray(v.rqddurs) && v.rqddurs.length > 0;
+        return !(hasRange && hasList);
       }),
-  },
-  {
-    id: 'video-placements-deprecated',
-    description:
-      'video.placement is deprecated – use video.plcmt instead (OpenRTB 2.6)',
-    severity: Severity.WARNING,
-    path: 'imp[].video.placement',
-    specRef: 'OpenRTB\u00A02.6\u00A0\u00A73.2.7',
-    applies: (ctx) => ctx.inventoryTypes.has('video'),
-    validate: ({ root }) =>
-      (root.imp as any[]).every(
-        (imp) => !imp.video || imp.video.placement === undefined,
-      ),
   },
 ];
 
 const nativeRules: Rule[] = [
   {
-    id: 'native-request-json',
-    description: 'imp.native.request must contain valid JSON',
+    id: 'native-json',
+    description: 'imp.native.request must be valid JSON.',
     severity: Severity.ERROR,
     path: 'imp[].native.request',
-    specRef: 'IAB\u00A0Native\u00A01.2\u00A0§4',
-    applies: (ctx) => ctx.inventoryTypes.has('native'),
+    specRef: 'IAB Native 1.2 §4',
+    applies: ({ inventory }) => inventory.has('native'),
     validate: ({ root }) =>
-      (root.imp as any[]).every((imp) => {
+      root.imp.every((imp: any) => {
         if (!imp.native) return true;
-        const rq = imp.native.request;
-        if (!isNonEmptyString(rq)) return false;
-        return safeJsonParse(rq).ok;
+        if (!isNonEmptyString(imp.native.request)) return false;
+        return safeJsonParse(imp.native.request).ok;
       }),
   },
 ];
 
 const doohRules: Rule[] = [
   {
-    id: 'dooh-qty-multiplier',
-    description:
-      'DOOH bid with imp.qty requires a positive qty.multiplier value',
+    id: 'dooh-qty',
+    description: 'imp.qty.multiplier must be a positive number for DOOH.',
     severity: Severity.ERROR,
     path: 'imp[].qty.multiplier',
-    specRef: 'Smaato\u00A0OpenRTB\u00A02.6\u00A0§imp.qty',
-    applies: (ctx) => ctx.inventoryTypes.has('dooh'),
+    applies: ({ inventory }) => inventory.has('dooh'),
     validate: ({ root }) =>
-      (root.imp as any[]).every((imp) => {
-        if (!imp.qty) return true;
-        return typeof imp.qty.multiplier === 'number' && imp.qty.multiplier > 0;
-      }),
+      root.imp.every((imp: any) => !imp.qty || imp.qty.multiplier > 0),
   },
 ];
 
-const partnerSharethroughRules: Rule[] = [
+const sharethroughRules: Rule[] = [
   {
     id: 'st-pkey',
-    description: 'Sharethrough requests must include ext.sharethrough.pkey',
+    description: 'Sharethrough profile: ext.sharethrough.pkey is required.',
     severity: Severity.ERROR,
     path: 'imp[].ext.sharethrough.pkey',
-    specRef: 'Sharethrough\u00A0Docs',
-    applies: (ctx) => ctx.partnerProfile === 'sharethrough',
+    applies: ({ partnerProfile }) => partnerProfile === 'sharethrough',
     validate: ({ root }) =>
-      (root.imp as any[]).every((imp) =>
-        isNonEmptyString(imp.ext?.sharethrough?.pkey),
-      ),
-    }];
+      root.imp.every((imp: any) => isNonEmptyString(imp.ext?.sharethrough?.pkey)),
+  },
+];
+
+const allRuleSets = [
+  coreRules,
+  bannerRules,
+  videoRules,
+  nativeRules,
+  doohRules,
+  sharethroughRules,
+];
+
+/** Primary analyse function */
+export function analyse(
+  jsonText: string,
+  options: AnalyseOptions = {}
+): AnalysisResult {
+  // Memoised parse
+  const cached = parseCache.get(jsonText);
+  if (cached) return cached;
+
+  // JSON parse
+  const parsed = safeJsonParse(jsonText);
+  if (!parsed.ok) {
+    const result: AnalysisResult = {
+      summary: {
+        requestType: 'Unknown', mediaFormats: [], impressions: 0,
+        platform: 'Unknown', deviceType: 'Unknown', geo: 'N/A',
+      },
+      issues: [{ id: 'json-parse', severity: Severity.ERROR,
+        message: `Invalid JSON: ${parsed.error.message}` }],
+      request: undefined,
+    };
+    parseCache.set(jsonText, result);
+    return result;
+  }
+
+  // Find root bid request
+  const root = findBidRequest(parsed.value);
+
+  // Build context
+  const ctx: Context = {
+    root,
+    inventory: new Set(),
+    isCTV: Boolean(options.forceCTV),
+    partnerProfile: options.partnerProfile,
+  };
+  if (root && Array.isArray(root.imp)) {
+    root.imp.forEach((imp: any) => {
+      if (imp.banner) ctx.inventory.add('banner');
+      if (imp.video) ctx.inventory.add('video');
+      if (imp.audio) ctx.inventory.add('audio');
+      if (imp.native) ctx.inventory.add('native');
+      if (imp.qty) ctx.inventory.add('dooh');
+    });
+    // Auto-detect CTV by device.devicetype
+    const dt = root.device?.devicetype;
+    if (!ctx.isCTV && dt === 3) ctx.isCTV = true;
+  }
+
+  // Collect issues
+  const issues: Issue[] = [];
+  allRuleSets.forEach((rules) => {
+    rules.forEach((rule) => {
+      if (!rule.applies || rule.applies(ctx)) {
+        const valid = rule.validate(ctx);
+        if (!valid) {
+          issues.push({
+            id: rule.id,
+            severity: rule.severity,
+            message: rule.description,
+            path: rule.path,
+            specRef: rule.specRef,
+          });
+        }
+      }
+    });
+  });
+
+  // Derive summary
+  const mediaFormats = Array.from(ctx.inventory);
+  const requestType: AnalysisSummary['requestType'] =
+    mediaFormats.length === 1
+      ? (mediaFormats[0].charAt(0).toUpperCase() + mediaFormats[0].slice(1)) as any
+      : mediaFormats.length > 1
+      ? 'Mixed' : 'Unknown';
+  const platform = root?.app ? 'App' : root?.site ? 'Site' : 'Unknown';
+  const impressions = Array.isArray(root?.imp) ? root.imp.length : 0;
+  const deviceType = DEVICE_TYPE[root?.device?.devicetype] || 'Unknown';
+  const geo = root?.device?.geo?.country || 'N/A';
+
+  const summary: AnalysisSummary = {
+    requestType, mediaFormats, impressions, platform, deviceType, geo,
+  };
+
+  const result: AnalysisResult = { summary, issues, request: root };
+  parseCache.set(jsonText, result);
+  return result;
+}
