@@ -7,7 +7,7 @@ import { Toaster, toast } from 'sonner';
 import { FileText, Play, Trash2, ChevronDown } from 'lucide-react';
 
 import { analyzer, AnalysisResult, ValidationIssue } from '@/lib/analyzer';
-import { exampleBidRequests } from '@/utils/exampleData';
+import { exampleBidRequests } from '@/lib/exampleData';
 import { ValidationResults } from '@/components/ValidationResults';
 import { BulkAnalysis } from '@/components/BulkAnalysis';
 import { FileUpload } from '@/components/FileUpload';
@@ -34,7 +34,7 @@ type AppAction =
 const initialState: AppState = {
   mode: 'single',
   isLoading: false,
-  jsonText: exampleBidRequests['valid-ctv'],
+  jsonText: exampleBidRequests['display'],
   analysisResult: null,
   validationIssues: [],
   fileName: '',
@@ -60,6 +60,63 @@ function appReducer(state: AppState, action: AppAction): AppState {
   }
 }
 
+// --- UI SUB-COMPONENTS ---
+const Header = ({ mode, setMode }: { mode: 'single' | 'bulk', setMode: (m: 'single' | 'bulk') => void }) => (
+    <header className="flex justify-between items-center mb-8">
+        <div className="flex items-center space-x-3">
+            <div className="bg-slate-800 p-2 rounded-lg border border-slate-700">
+                <svg className="w-6 h-6 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
+            </div>
+            <h1 className="text-2xl font-bold text-white">BABE Verificator</h1>
+        </div>
+        <div className="flex items-center space-x-2 bg-slate-900 border border-slate-700 rounded-lg p-1">
+            <Button 
+              variant={mode === 'single' ? 'secondary' : 'ghost'} 
+              className={mode === 'single' ? 'bg-white text-slate-900 hover:bg-slate-200' : ''}
+              onClick={() => setMode('single')}
+            >
+              Single Mode
+            </Button>
+            <Button 
+              variant={mode === 'bulk' ? 'secondary' : 'ghost'}
+              className={mode === 'bulk' ? 'bg-white text-slate-900 hover:bg-slate-200' : ''}
+              onClick={() => setMode('bulk')}
+            >
+              Bulk Mode
+            </Button>
+        </div>
+    </header>
+);
+
+const JsonEditor = ({ jsonText, onTextChange }: { jsonText: string; onTextChange: (text: string) => void }) => (
+    <textarea
+        value={jsonText}
+        onChange={(e) => onTextChange(e.target.value)}
+        placeholder="Paste your OpenRTB bid request here..."
+        className="w-full h-full min-h-[400px] p-4 font-mono text-sm bg-slate-900 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500 text-slate-300 resize-none border border-slate-700"
+        spellCheck="false"
+    />
+);
+
+const ExamplesDropdown = ({ onLoadExample }: { onLoadExample: (key: keyof typeof exampleBidRequests) => void }) => (
+    <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+            <Button variant="outline" size="sm">
+                Load Example <ChevronDown className="ml-2 h-4 w-4" />
+            </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent>
+            <DropdownMenuItem onSelect={() => onLoadExample('display')}>Display Banner</DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => onLoadExample('video')}>Video Ad</DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => onLoadExample('native')}>Native Ad</DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => onLoadExample('ctv')}>Connected TV</DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => onLoadExample('audio')}>Audio Ad</DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => onLoadExample('gdpr')}>GDPR Example</DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => onLoadExample('error-privacy')}>Privacy Error</DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => onLoadExample('malformed-json')}>Malformed JSON</DropdownMenuItem>
+        </DropdownMenuContent>
+    </DropdownMenu>
+);
 
 // --- MAIN PAGE ---
 export default function IndexPage() {
@@ -83,7 +140,7 @@ export default function IndexPage() {
     }, [state.jsonText]);
 
     const handleLoadExample = useCallback((key: keyof typeof exampleBidRequests) => {
-        dispatch({ type: 'SET_JSON_TEXT', payload: JSON.stringify(exampleBidRequests[key], null, 2) });
+        dispatch({ type: 'SET_JSON_TEXT', payload: exampleBidRequests[key] });
     }, []);
 
     const handleFormat = useCallback(() => {
@@ -105,7 +162,7 @@ export default function IndexPage() {
                 dispatch({ type: 'SET_BULK_DATA', payload: { fileName: file.name, requests } });
                 toast.success(`${requests.length} requests loaded from ${file.name}`);
             } catch (e) {
-                 dispatch({ type: 'SET_SINGLE_RESULT', payload: { analysis: { error: 'Failed to parse log file. Ensure it contains one valid JSON per line.' }, issues: [] } });
+                 dispatch({ type: 'SET_SINGLE_RESULT', payload: { analysis: { error: 'Failed to parse log file. Ensure it contains one valid JSON per line.', requestType: "Error", mediaFormats: [], impressions: 0, platform: "", deviceType: "", geo: "" }, issues: [] } });
             }
         };
         reader.readAsText(file);
@@ -146,11 +203,15 @@ export default function IndexPage() {
                                 </div>
                             </Card>
                         ) : (
-                            <BulkAnalysis data={state.bulkRequests} fileName={state.fileName} onRequestSelect={handleSelectRequestFromBulk} />
+                            <FileUpload onFileUpload={handleFileUpload} />
                         )}
                     </div>
                     <div className="lg:col-span-7">
-                        <ValidationResults analysis={state.analysisResult} issues={state.validationIssues} isLoading={state.isLoading} />
+                        {state.mode === 'single' ? (
+                            <ValidationResults analysis={state.analysisResult} issues={state.validationIssues} isLoading={state.isLoading} />
+                        ) : (
+                            <BulkAnalysis data={state.bulkRequests} fileName={state.fileName} onRequestSelect={handleSelectRequestFromBulk} />
+                        )}
                     </div>
                 </div>
             </main>
