@@ -1,3 +1,4 @@
+
 /**
  * src/lib/analyzer.ts
  * ------------------
@@ -48,6 +49,14 @@ export interface AnalysisResult {
   summary: AnalysisSummary;
   issues: Issue[];
   request: any;
+  error?: string;
+}
+
+// Legacy interface for compatibility
+export interface ValidationIssue {
+  severity: 'Error' | 'Warning' | 'Info';
+  message: string;
+  path: string;
 }
 
 export interface AnalyseOptions {
@@ -311,6 +320,7 @@ export function analyse(
       issues: [{ id: 'json-parse', severity: Severity.ERROR,
         message: `Invalid JSON: ${parsed.error.message}` }],
       request: undefined,
+      error: `Invalid JSON: ${parsed.error.message}`,
     };
     parseCache.set(jsonText, result);
     return result;
@@ -378,3 +388,23 @@ export function analyse(
   parseCache.set(jsonText, result);
   return result;
 }
+
+// Compatibility layer for existing components
+export const analyzer = {
+  analyze: (jsonText: string): { analysis: AnalysisResult; issues: ValidationIssue[] } => {
+    const result = analyse(jsonText);
+    
+    // Convert issues to legacy format
+    const legacyIssues: ValidationIssue[] = result.issues.map(issue => ({
+      severity: issue.severity === 'error' ? 'Error' : 
+                issue.severity === 'warning' ? 'Warning' : 'Info',
+      message: issue.message,
+      path: issue.path || 'unknown',
+    }));
+
+    return {
+      analysis: result,
+      issues: legacyIssues,
+    };
+  }
+};
