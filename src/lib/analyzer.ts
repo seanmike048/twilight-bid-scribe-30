@@ -338,3 +338,4 @@ const partnerSharethroughRules: Rule[] = [
       (root.imp as any[]).every((imp) =>
         isNonEmptyString(imp.ext?.sharethrough?.pkey),
       ),
+    }]
