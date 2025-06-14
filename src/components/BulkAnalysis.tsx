@@ -1,7 +1,7 @@
-
 import React, { useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { ArrowLeft, FileText, BarChart3, Globe, AlertTriangle, CheckCircle, PieChart } from 'lucide-react';
 import { ResponsiveContainer, PieChart as RechartsPieChart, Pie, Cell, BarChart, XAxis, YAxis, Tooltip, Bar, Legend } from 'recharts';
 import { analyzer } from '@/lib/analyzer';
@@ -191,4 +191,3 @@ export const BulkAnalysis: React.FC<BulkAnalysisProps> = ({
     </div>
   );
 };
-

@@ -1,9 +1,10 @@
 
 import React from 'react';
-import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '@/components/ui/card';
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
 import { 
-  Tv, Speaker, Image, Clapperboard, Layout, Monitor, FileCode, Shield 
+  Tv, Speaker, Image, Clapperboard, Layout, Monitor, FileCode, Shield, Tablet, Smartphone, Users,
 } from 'lucide-react';
 
 interface AnalysisSummary {
@@ -20,18 +21,20 @@ interface AnalysisSummary {
   privacySignals?: string[];
 }
 
-interface StatProps {
+interface DetailItemProps {
   label: string;
-  value: string | number | undefined;
-  className?: string;
+  value?: string | number;
+  children?: React.ReactNode;
+  icon?: React.ReactNode;
 }
 
-const Stat: React.FC<StatProps> = ({ label, value, className }) => {
-  if (!value || value === '—' || value === undefined || value === null || value === '') return null;
+const DetailItem: React.FC<DetailItemProps> = ({ label, value, children, icon }) => {
+  if (!value && !children) return null;
   return (
-    <div className={className}>
-      <p className="text-slate-400">{label}</p>
-      <p className="font-bold text-lg text-white break-words">{value}</p>
+    <div>
+      <p className="text-sm text-slate-400 flex items-center">{icon}{label}</p>
+      {value && <p className="font-semibold text-base text-white break-words">{value}</p>}
+      {children}
     </div>
   );
 };
@@ -48,44 +51,58 @@ const requestTypeIcon = (requestType: string) => {
   }
 };
 
+const getDeviceIcon = (deviceType: string = "") => {
+    const lowerDeviceType = deviceType.toLowerCase();
+    if (lowerDeviceType.includes('phone') || lowerDeviceType.includes('mobile')) return <Smartphone className="w-4 h-4 mr-2 text-slate-400" />;
+    if (lowerDeviceType.includes('tablet')) return <Tablet className="w-4 h-4 mr-2 text-slate-400" />;
+    if (lowerDeviceType.includes('connected tv') || lowerDeviceType.includes('ctv')) return <Tv className="w-4 h-4 mr-2 text-slate-400" />;
+    return <Monitor className="w-4 h-4 mr-2 text-slate-400" />;
+};
+
+
 export const BidRequestSummaryCard: React.FC<{ summary: AnalysisSummary }> = ({ summary }) => {
-  // Prepare field values (hide any row whose output is falsy/undefined)
-  const stats = [
-    { label: "Media Format", value: Array.isArray(summary.mediaFormats) && summary.mediaFormats.length > 0 ? summary.mediaFormats.join(', ') : undefined },
-    { label: "Platform", value: summary.platform },
-    { label: "Device Type", value: summary.deviceType },
-    { label: "Impressions", value: summary.impressions && summary.impressions > 0 ? summary.impressions : undefined },
-    { label: "Geography", value: summary.geo },
-    { label: "Timeout", value: summary.timeoutMs ? `${summary.timeoutMs} ms` : undefined },
-    { label: "Currency", value: summary.currency },
-    { label: "Supply Chain", value: summary.schainNodes ? `${summary.schainNodes} nodes` : undefined, className: summary.schainNodes ? "text-green-400" : "" },
-    { label: "Bid Floor", value: summary.bidFloor },
-  ];
-
-  // Card grid (filter out empty stats, preserve 3col structure)
-  const statGrid = stats.filter(s => !!s.value);
-
   return (
-    <Card className="bg-slate-900 border-slate-800 max-w-xl w-full mx-auto">
-      <CardHeader className="flex flex-row items-center gap-3 pb-3">
-        <span>{requestTypeIcon(summary.requestType)}</span>
-        <CardTitle className="text-lg text-white font-semibold mr-1 flex-1">Bid Request Analysis</CardTitle>
-        <Badge className="bg-orange-500 text-white ml-2 font-semibold rounded-md px-3 py-1 h-auto">
-          {summary.requestType}
-        </Badge>
+    <Card className="bg-slate-900 border-slate-800 w-full">
+      <CardHeader className="flex flex-row items-center gap-3 pb-4">
+        {requestTypeIcon(summary.requestType)}
+        <CardTitle className="text-lg text-white font-semibold">Bid Request Analysis</CardTitle>
       </CardHeader>
-      <CardContent className="pt-0 pb-2 grid grid-cols-2 md:grid-cols-3 gap-x-8 gap-y-4 text-sm">
-        {statGrid.map((stat, idx) => (
-          <Stat key={stat.label} label={stat.label} value={stat.value} className={stat.className} />
-        ))}
+      <CardContent className="pt-0 pb-4 space-y-4 text-sm">
+        <div>
+          <p className="text-sm text-slate-400">Request Type</p>
+          <Badge className="bg-orange-500 text-white mt-1 font-semibold rounded-md px-2 py-0.5 h-auto text-sm">
+            {summary.requestType}
+          </Badge>
+        </div>
+        
+        <div className="grid grid-cols-2 gap-4">
+          <DetailItem label="Media Format" value={Array.isArray(summary.mediaFormats) && summary.mediaFormats.length > 0 ? summary.mediaFormats.join(', ') : 'N/A'} />
+          <DetailItem label="Impressions" value={summary.impressions && summary.impressions > 0 ? summary.impressions : 'N/A'} />
+          <DetailItem label="Platform" value={summary.platform} />
+          <DetailItem label="Device Type" value={summary.deviceType} icon={getDeviceIcon(summary.deviceType)} />
+        </div>
+        
+        <Separator className="bg-slate-700" />
+        
+        <DetailItem label="Privacy Signals" icon={<Shield className="w-4 h-4 mr-2 text-slate-400" />}>
+          <p className="font-semibold text-base text-white break-words">
+            {summary.privacySignals && summary.privacySignals.length > 0 ? summary.privacySignals.join(', ') : 'None detected'}
+          </p>
+        </DetailItem>
+        
+        <Separator className="bg-slate-700" />
+        
+        <div className="space-y-2">
+            <p className="text-sm text-slate-400 flex items-center"><Users className="w-4 h-4 mr-2 text-slate-400" />Additional Details</p>
+            <div className="pl-6 space-y-1 text-base">
+                {summary.timeoutMs && <p className="text-slate-300">Timeout: <span className="font-semibold text-white">{summary.timeoutMs}ms</span></p>}
+                {summary.currency && <p className="text-slate-300">Currency: <span className="font-semibold text-white">{summary.currency}</span></p>}
+                {summary.schainNodes !== undefined && <p className="text-slate-300">Supply Chain: <span className="font-semibold text-green-400">{summary.schainNodes} nodes</span></p>}
+                {summary.bidFloor && <p className="text-slate-300">Bid Floor: <span className="font-semibold text-white">{summary.bidFloor}</span></p>}
+            </div>
+        </div>
+        
       </CardContent>
-      {summary.privacySignals && summary.privacySignals.length > 0 && (
-        <CardFooter className="flex items-center gap-2 pt-0 pb-2 text-green-300">
-          <Shield className="w-4 h-4 mr-1" />
-          <span className="text-xs font-medium">Privacy Signals:</span>
-          <span className="text-xs font-mono">{summary.privacySignals.join(', ')}</span>
-        </CardFooter>
-      )}
     </Card>
   );
 };
