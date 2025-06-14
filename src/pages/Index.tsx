@@ -1,4 +1,3 @@
-
 import React, { useState, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -92,29 +91,35 @@ export default function IndexPage() {
             if (analysis && !analysis.error) {
                 try {
                     const parsedRequest = JSON.parse(jsonText);
+                    const summary = analysis.summary as any;
 
                     // Enhance summary with data the analyzer might have missed
-                    if (!analysis.summary.timeoutMs && parsedRequest.tmax) {
-                        analysis.summary.timeoutMs = parsedRequest.tmax;
+                    if (!summary.timeoutMs && parsedRequest.tmax) {
+                        summary.timeoutMs = parsedRequest.tmax;
                     }
 
                     // Top-level currency
-                    if (!analysis.summary.currency && parsedRequest.cur && parsedRequest.cur.length > 0) {
-                        analysis.summary.currency = parsedRequest.cur[0];
+                    if (!summary.currency && parsedRequest.cur && parsedRequest.cur.length > 0) {
+                        summary.currency = parsedRequest.cur[0];
                     }
 
                     // Impression-level bid floor and currency
                     if (parsedRequest.imp && parsedRequest.imp.length > 0) {
                         const firstImp = parsedRequest.imp[0];
-                        if (firstImp.bidfloor && !analysis.summary.bidFloor) {
+                        if (firstImp.bidfloor && !summary.bidFloor) {
                             // Use impression-level currency if available, otherwise fallback to request-level currency
-                            const floorCur = firstImp.bidfloorcur || analysis.summary.currency || '';
-                            analysis.summary.bidFloor = `${firstImp.bidfloor}${floorCur ? ` ${floorCur}` : ''}`;
+                            const floorCur = firstImp.bidfloorcur || summary.currency || '';
+                            summary.bidFloor = `${firstImp.bidfloor}${floorCur ? ` ${floorCur}` : ''}`;
                         }
                         // If request-level currency is missing, try to get it from the impression
-                        if (!analysis.summary.currency && firstImp.bidfloorcur) {
-                            analysis.summary.currency = firstImp.bidfloorcur;
+                        if (!summary.currency && firstImp.bidfloorcur) {
+                            summary.currency = firstImp.bidfloorcur;
                         }
+                    }
+
+                    // Add schain info
+                    if (parsedRequest.source && parsedRequest.source.schain && Array.isArray(parsedRequest.source.schain.nodes)) {
+                        summary.schainNodes = parsedRequest.source.schain.nodes.length;
                     }
                 } catch (e) {
                     // This is a safeguard; analyzer should have already caught invalid JSON.
