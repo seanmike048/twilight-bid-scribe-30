@@ -1,10 +1,9 @@
-
 import React from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { 
-  Tv, Speaker, Image, Clapperboard, Layout, Monitor, FileCode, Shield, Tablet, Smartphone, Users,
+  Tv, Monitor, Shield, Tablet, Smartphone, FileSearch,
 } from 'lucide-react';
 
 interface AnalysisSummary {
@@ -39,18 +38,6 @@ const DetailItem: React.FC<DetailItemProps> = ({ label, value, children, icon })
   );
 };
 
-const requestTypeIcon = (requestType: string) => {
-  switch (requestType) {
-    case "Banner": return <Image className="w-6 h-6 text-amber-400" />;
-    case "Video": return <Clapperboard className="w-6 h-6 text-amber-400" />;
-    case "Audio": return <Speaker className="w-6 h-6 text-amber-400" />;
-    case "Native": return <Layout className="w-6 h-6 text-amber-400" />;
-    case "Connected TV (CTV)": return <Tv className="w-6 h-6 text-amber-400" />;
-    case "DOOH": return <Monitor className="w-6 h-6 text-amber-400" />;
-    default: return <FileCode className="w-6 h-6 text-amber-400" />;
-  }
-};
-
 const getDeviceIcon = (deviceType: string = "") => {
     const lowerDeviceType = deviceType.toLowerCase();
     if (lowerDeviceType.includes('phone') || lowerDeviceType.includes('mobile')) return <Smartphone className="w-4 h-4 mr-2 text-slate-400" />;
@@ -64,7 +51,7 @@ export const BidRequestSummaryCard: React.FC<{ summary: AnalysisSummary }> = ({ 
   return (
     <Card className="bg-slate-900 border-slate-800 w-full">
       <CardHeader className="flex flex-row items-center gap-3 pb-4">
-        {requestTypeIcon(summary.requestType)}
+        <FileSearch className="w-6 h-6 text-amber-400" />
         <CardTitle className="text-lg text-white font-semibold">Bid Request Analysis</CardTitle>
       </CardHeader>
       <CardContent className="pt-0 pb-4 space-y-4 text-sm">
@@ -78,8 +65,12 @@ export const BidRequestSummaryCard: React.FC<{ summary: AnalysisSummary }> = ({ 
         <div className="grid grid-cols-2 gap-4">
           <DetailItem label="Media Format" value={Array.isArray(summary.mediaFormats) && summary.mediaFormats.length > 0 ? summary.mediaFormats.join(', ') : 'N/A'} />
           <DetailItem label="Impressions" value={summary.impressions && summary.impressions > 0 ? summary.impressions : 'N/A'} />
-          <DetailItem label="Platform" value={summary.platform} />
+          <DetailItem label="Platform" value={summary.platform || 'N/A'} />
           <DetailItem label="Device Type" value={summary.deviceType} icon={getDeviceIcon(summary.deviceType)} />
+          <DetailItem label="Timeout" value={summary.timeoutMs ? `${summary.timeoutMs}ms` : 'N/A'} />
+          <DetailItem label="Currency" value={summary.currency || 'N/A'} />
+          <DetailItem label="Bid Floor" value={summary.bidFloor || 'N/A'} />
+          <DetailItem label="Supply Chain" value={summary.schainNodes !== undefined ? `${summary.schainNodes} nodes` : 'N/A'} />
         </div>
         
         <Separator className="bg-slate-700" />
@@ -89,18 +80,6 @@ export const BidRequestSummaryCard: React.FC<{ summary: AnalysisSummary }> = ({ 
             {summary.privacySignals && summary.privacySignals.length > 0 ? summary.privacySignals.join(', ') : 'None detected'}
           </p>
         </DetailItem>
-        
-        <Separator className="bg-slate-700" />
-        
-        <div className="space-y-2">
-            <p className="text-sm text-slate-400 flex items-center"><Users className="w-4 h-4 mr-2 text-slate-400" />Additional Details</p>
-            <div className="pl-6 space-y-1 text-base">
-                {summary.timeoutMs && <p className="text-slate-300">Timeout: <span className="font-semibold text-white">{summary.timeoutMs}ms</span></p>}
-                {summary.currency && <p className="text-slate-300">Currency: <span className="font-semibold text-white">{summary.currency}</span></p>}
-                {summary.schainNodes !== undefined && <p className="text-slate-300">Supply Chain: <span className="font-semibold text-green-400">{summary.schainNodes} nodes</span></p>}
-                {summary.bidFloor && <p className="text-slate-300">Bid Floor: <span className="font-semibold text-white">{summary.bidFloor}</span></p>}
-            </div>
-        </div>
         
       </CardContent>
     </Card>
