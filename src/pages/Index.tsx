@@ -202,7 +202,7 @@ export default function IndexPage() {
 
     return (
         <div className="min-h-screen bg-[#0c111d] text-slate-200 font-sans">
-            <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+            <main className="max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
                 <Header mode={mode} setMode={setMode} />
                 
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-8" style={{height: 'calc(100vh - 8rem)'}}>
@@ -245,7 +245,7 @@ export default function IndexPage() {
                         )}
                     </div>
                     
-                    <div className="lg:col-span-7 h-full overflow-y-auto pr-2">
+                    <div className="lg:col-span-7 h-full">
                         {mode === 'single' ? (
                             <ValidationResults 
                                 analysis={analysisResult} 

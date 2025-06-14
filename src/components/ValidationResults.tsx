@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -112,11 +111,13 @@ export const ValidationResults: React.FC<Props> = ({ analysis, issues, isLoading
 
 
   return (
-    <div className="space-y-6">
-      <BidRequestSummaryCard summary={analysis.summary} />
+    <div className="flex flex-col h-full space-y-6">
+      <div className="flex-shrink-0">
+        <BidRequestSummaryCard summary={analysis.summary} />
+      </div>
 
-      <Card className="bg-slate-900 border-slate-800">
-        <CardHeader>
+      <Card className="bg-slate-900 border-slate-800 flex-grow flex flex-col overflow-hidden">
+        <CardHeader className="flex-shrink-0">
           <div className="flex justify-between items-center">
             <CardTitle className="text-lg text-white">Validation Issues</CardTitle>
             <div className="flex items-center space-x-1 bg-slate-800 p-1 rounded-lg">
@@ -127,9 +128,9 @@ export const ValidationResults: React.FC<Props> = ({ analysis, issues, isLoading
             </div>
           </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="flex-grow overflow-y-auto pr-4">
           {filteredIssues.length === 0 ? (
-            <div className="text-center py-10 text-slate-400 flex flex-col items-center justify-center">
+            <div className="text-center py-10 text-slate-400 flex flex-col items-center justify-center h-full">
               <CheckCircle className="w-10 h-10 mb-3 text-green-500"/>
               <p className="font-semibold text-green-400">
                 {filter === 'All' 
@@ -139,7 +140,7 @@ export const ValidationResults: React.FC<Props> = ({ analysis, issues, isLoading
               <p className="text-sm mt-1">{filter === 'All' && "This bid request appears to be fully compliant."}</p>
             </div>
           ) : (
-            <div className="space-y-3 max-h-[calc(100vh-36rem)] overflow-y-auto pr-2">
+            <div className="space-y-3">
               {filteredIssues.map((issue, i) => (
                 <div 
                   key={i} 
