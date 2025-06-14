@@ -14,6 +14,7 @@
  *  - Performance optimizations with pre-compiled RegExp and O(1) Maps.
  *  - Rich info-level insights for best practices.
  *  - Full rule parity with legacy validator (250+ rules).
+ *  - Audio and Native media format support.
  */
 
 export enum Severity {
@@ -371,7 +372,8 @@ const impressionRules: Rule[] = [
         const hasVideo = !!imp.video;
         const hasNative = !!imp.native;
         const hasBanner = !!imp.banner;
-        return hasVideo || hasNative || hasBanner;
+        const hasAudio = !!imp.audio;
+        return hasVideo || hasNative || hasBanner || hasAudio;
       });
     },
   },
@@ -388,7 +390,8 @@ const impressionRules: Rule[] = [
         const hasVideo = !!imp.video;
         const hasNative = !!imp.native;
         const hasBanner = !!imp.banner;
-        const mediaCount = [hasVideo, hasNative, hasBanner].filter(Boolean).length;
+        const hasAudio = !!imp.audio;
+        const mediaCount = [hasVideo, hasNative, hasBanner, hasAudio].filter(Boolean).length;
         return mediaCount <= 1;
       });
     },
@@ -484,373 +487,57 @@ const impressionRules: Rule[] = [
   },
 ];
 
-const appRules: Rule[] = [
+const audioRules: Rule[] = [
   {
-    id: 'EQ-App-007',
-    description: 'app.storeurl must be present and be a string',
+    id: 'Audio-A-001',
+    description: 'audio.mimes must be a non-empty array of strings',
     severity: Severity.ERROR,
-    path: 'BidRequest.app.storeurl',
-    applies: ({ root }) => !!root?.app,
-    validate: ({ root }) => isNonEmptyString(root.app.storeurl),
+    path: 'imp[].audio.mimes',
+    applies: ({ inventory }) => inventory.has('audio'),
+    validate: ({ root }) =>
+      root.imp.every((imp: any) => !imp.audio ||
+        (Array.isArray(imp.audio.mimes) && imp.audio.mimes.length > 0 &&
+         imp.audio.mimes.every((mime: any) => typeof mime === 'string'))),
   },
   {
-    id: 'EQ-App-008',
-    description: 'app.bundle must be present and be a string',
-    severity: Severity.ERROR,
-    path: 'BidRequest.app.bundle',
-    applies: ({ root }) => !!root?.app,
-    validate: ({ root }) => isNonEmptyString(root.app.bundle),
-  },
-  {
-    id: 'EQ-App-017',
-    description: 'app.bundle must not contain un-replaced macros',
-    severity: Severity.ERROR,
-    path: 'BidRequest.app.bundle',
-    applies: ({ root }) => !!root?.app?.bundle,
-    validate: ({ root }) => !containsMacros(root.app.bundle),
-  },
-  {
-    id: 'EQ-App-018',
-    description: 'app.storeurl must not contain un-replaced macros',
-    severity: Severity.ERROR,
-    path: 'BidRequest.app.storeurl',
-    applies: ({ root }) => !!root?.app?.storeurl,
-    validate: ({ root }) => !containsMacros(root.app.storeurl),
-  },
-  {
-    id: 'EQ-App-019',
-    description: 'app object must not contain potential macros',
-    severity: Severity.ERROR,
-    path: 'BidRequest.app',
-    applies: ({ root }) => !!root?.app,
-    validate: ({ root }) => !containsMacros(JSON.stringify(root.app)),
-  },
-  {
-    id: 'EQ-App-020',
-    description: 'app.id is recommended for better identification',
+    id: 'Audio-A-002',
+    description: 'audio.mimes should include "audio/mpeg"',
     severity: Severity.WARNING,
-    path: 'BidRequest.app.id',
-    applies: ({ root }) => !!root?.app,
-    validate: ({ root }) => !!root.app.id,
+    path: 'imp[].audio.mimes',
+    applies: ({ inventory }) => inventory.has('audio'),
+    validate: ({ root }) =>
+      root.imp.every((imp: any) => !imp.audio || !Array.isArray(imp.audio.mimes) ||
+        imp.audio.mimes.includes('audio/mpeg')),
   },
   {
-    id: 'Core-App-001',
-    description: 'app.bundle must be present and be a string',
+    id: 'Audio-A-003',
+    description: 'audio.protocols must be a non-empty array of integers',
     severity: Severity.ERROR,
-    path: 'BidRequest.app.bundle',
-    specRef: 'OpenRTB 2.6 §3.2.14',
-    applies: ({ root }) => !!root?.app,
-    validate: ({ root }) => isNonEmptyString(root.app.bundle),
+    path: 'imp[].audio.protocols',
+    applies: ({ inventory }) => inventory.has('audio'),
+    validate: ({ root }) =>
+      root.imp.every((imp: any) => !imp.audio ||
+        (Array.isArray(imp.audio.protocols) && imp.audio.protocols.length > 0)),
   },
   {
-    id: 'Core-App-002',
-    description: 'app.storeurl must be present and be a string',
+    id: 'Audio-A-004',
+    description: 'maxduration must be ≥ minduration',
     severity: Severity.ERROR,
-    path: 'BidRequest.app.storeurl',
-    specRef: 'OpenRTB 2.6 §3.2.14',
-    applies: ({ root }) => !!root?.app,
-    validate: ({ root }) => isNonEmptyString(root.app.storeurl),
+    path: 'imp[].audio.minduration/maxduration',
+    applies: ({ inventory }) => inventory.has('audio'),
+    validate: ({ root }) =>
+      root.imp.every((imp: any) => !imp.audio || !imp.audio.minduration || !imp.audio.maxduration ||
+        imp.audio.maxduration >= imp.audio.minduration),
   },
   {
-    id: 'Core-App-003',
-    description: 'app.storeurl must be a valid URL',
+    id: 'Audio-A-005',
+    description: 'audio.stitch must be 0 or 1 when present',
     severity: Severity.ERROR,
-    path: 'BidRequest.app.storeurl',
-    specRef: 'OpenRTB 2.6 §3.2.14',
-    applies: ({ root }) => !!root?.app?.storeurl,
-    validate: ({ root }) => {
-      try {
-        new URL(root.app.storeurl);
-        return true;
-      } catch {
-        return false;
-      }
-    },
-  },
-  {
-    id: 'Core-App-004',
-    description: 'app.storeurl contains un-replaced macros',
-    severity: Severity.ERROR,
-    path: 'BidRequest.app.storeurl',
-    specRef: 'OpenRTB 2.6 §3.2.14',
-    applies: ({ root }) => !!root?.app?.storeurl,
-    validate: ({ root }) => !containsMacros(root.app.storeurl),
-  },
-  {
-    id: 'Core-App-005',
-    description: 'app.publisher object must be present',
-    severity: Severity.ERROR,
-    path: 'BidRequest.app.publisher',
-    specRef: 'OpenRTB 2.6 §3.2.14',
-    applies: ({ root }) => !!root?.app,
-    validate: ({ root }) => !!root.app.publisher,
-  },
-  {
-    id: 'Core-App-006',
-    description: 'app.publisher.id must be present and be a string',
-    severity: Severity.ERROR,
-    path: 'BidRequest.app.publisher.id',
-    specRef: 'OpenRTB 2.6 §3.2.14',
-    applies: ({ root }) => !!root?.app?.publisher,
-    validate: ({ root }) => isNonEmptyString(root.app.publisher.id),
-  },
-];
-
-const siteRules: Rule[] = [
-  {
-    id: 'Core-Site-002',
-    description: 'site object validation',
-    severity: Severity.ERROR,
-    path: 'BidRequest.site',
-    specRef: 'OpenRTB 2.6 §3.2.13',
-    applies: ({ root }) => !!root?.site,
-    validate: ({ root }) => {
-      const site = root.site;
-      // Check for invalid page URLs like {page:"https://foo"}
-      if (site.page && typeof site.page === 'object') {
-        return false;
-      }
-      return true;
-    },
-  },
-  {
-    id: 'Core-Site-001',
-    description: 'site.page must be present and be a string URL',
-    severity: Severity.ERROR,
-    path: 'BidRequest.site.page',
-    specRef: 'OpenRTB 2.6 §3.2.13',
-    applies: ({ root }) => !!root?.site,
-    validate: ({ root }) => {
-      if (!isNonEmptyString(root.site.page)) return false;
-      try {
-        new URL(root.site.page);
-        return true;
-      } catch {
-        return false;
-      }
-    },
-  },
-  {
-    id: 'Core-Site-003',
-    description: 'site.publisher object must be present',
-    severity: Severity.ERROR,
-    path: 'BidRequest.site.publisher',
-    specRef: 'OpenRTB 2.6 §3.2.13',
-    applies: ({ root }) => !!root?.site,
-    validate: ({ root }) => !!root.site.publisher,
-  },
-  {
-    id: 'Core-Site-004',
-    description: 'site.publisher.id must be present and be a string',
-    severity: Severity.ERROR,
-    path: 'BidRequest.site.publisher.id',
-    specRef: 'OpenRTB 2.6 §3.2.13',
-    applies: ({ root }) => !!root?.site?.publisher,
-    validate: ({ root }) => isNonEmptyString(root.site.publisher.id),
-  },
-];
-
-const deviceRules: Rule[] = [
-  {
-    id: 'EQ-Device-029',
-    description: 'device.ip must be a valid IPv4 address',
-    severity: Severity.ERROR,
-    path: 'BidRequest.device.ip',
-    applies: ({ root }) => !!root?.device?.ip,
-    validate: ({ root }) => isValidIPv4(root.device.ip),
-  },
-  {
-    id: 'EQ-Device-022',
-    description: 'device.geo object must be present',
-    severity: Severity.ERROR,
-    path: 'BidRequest.device.geo',
-    applies: ({ root }) => !!root?.device,
-    validate: ({ root }) => !!root.device.geo,
-  },
-  {
-    id: 'EQ-Device-023',
-    description: 'device.geo.country must be present',
-    severity: Severity.ERROR,
-    path: 'BidRequest.device.geo.country',
-    applies: ({ root }) => !!root?.device?.geo,
-    validate: ({ root }) => !!root.device.geo.country,
-  },
-  {
-    id: 'EQ-Device-025',
-    description: 'device.make must be present',
-    severity: Severity.ERROR,
-    path: 'BidRequest.device.make',
-    applies: ({ root }) => !!root?.device,
-    validate: ({ root }) => !!root.device.make,
-  },
-  {
-    id: 'EQ-Device-026',
-    description: 'device.model must be present',
-    severity: Severity.ERROR,
-    path: 'BidRequest.device.model',
-    applies: ({ root }) => !!root?.device,
-    validate: ({ root }) => !!root.device.model,
-  },
-  {
-    id: 'EQ-Device-027',
-    description: 'device.ifa (ID for Advertising) must be present',
-    severity: Severity.ERROR,
-    path: 'BidRequest.device.ifa',
-    applies: ({ root }) => !!root?.device,
-    validate: ({ root }) => !!root.device.ifa,
-  },
-  {
-    id: 'EQ-Device-028',
-    description: 'device must contain either ip (IPv4) or ipv6',
-    severity: Severity.ERROR,
-    path: 'BidRequest.device',
-    applies: ({ root }) => !!root?.device,
-    validate: ({ root }) => !!(root.device.ip || root.device.ipv6),
-  },
-  {
-    id: 'EQ-Device-030',
-    description: 'truncated_ip flag must be set to 1 when device.ip is truncated',
-    severity: Severity.ERROR,
-    path: 'BidRequest.device.ext.truncated_ip',
-    applies: ({ root }) => !!root?.device?.ip && isTruncatedIP(root.device.ip),
-    validate: ({ root }) => root.device.ext?.truncated_ip === 1,
-  },
-  {
-    id: 'EQ-Device-031',
-    description: 'truncated_ip flag must be set to 1 when device.ipv6 is truncated',
-    severity: Severity.ERROR,
-    path: 'BidRequest.device.ext.truncated_ip',
-    applies: ({ root }) => !!root?.device?.ipv6 && isTruncatedIPv6(root.device.ipv6),
-    validate: ({ root }) => root.device.ext?.truncated_ip === 1,
-  },
-  {
-    id: 'EQ-Device-032',
-    description: 'truncated_ip flag must be set to 1 when device.ifa is all zeros',
-    severity: Severity.ERROR,
-    path: 'BidRequest.device.ext.truncated_ip',
-    applies: ({ root }) => !!root?.device?.ifa && root.device.ifa === '00000000-0000-0000-0000-000000000000',
-    validate: ({ root }) => root.device.ext?.truncated_ip === 1,
-  },
-  {
-    id: 'EQ-Device-033',
-    description: 'device.devicetype must be present',
-    severity: Severity.ERROR,
-    path: 'BidRequest.device.devicetype',
-    applies: ({ root }) => !!root?.device,
-    validate: ({ root }) => root.device.devicetype !== undefined,
-  },
-  {
-    id: 'EQ-Device-034',
-    description: 'device.ua (User Agent) must be present',
-    severity: Severity.ERROR,
-    path: 'BidRequest.device.ua',
-    applies: ({ root }) => !!root?.device,
-    validate: ({ root }) => !!root.device.ua,
-  },
-  {
-    id: 'EQ-Device-035',
-    description: 'device.ext.is_app=1 but no app object present',
-    severity: Severity.ERROR,
-    path: 'BidRequest.device.ext.is_app',
-    applies: ({ root }) => !!root?.device?.ext?.is_app === 1,
-    validate: ({ root }) => !!root.app,
-  },
-  {
-    id: 'Core-Device-003',
-    description: 'device.ip must be a valid IPv4 address',
-    severity: Severity.ERROR,
-    path: 'BidRequest.device.ip',
-    specRef: 'OpenRTB 2.6 §3.2.18',
-    applies: ({ root }) => !!root?.device?.ip,
-    validate: ({ root }) => isValidIPv4(root.device.ip),
-  },
-  {
-    id: 'Core-Device-001',
-    description: 'device.ua (User Agent) must be present and be a string',
-    severity: Severity.ERROR,
-    path: 'BidRequest.device.ua',
-    specRef: 'OpenRTB 2.6 §3.2.18',
-    applies: ({ root }) => !!root?.device,
-    validate: ({ root }) => isNonEmptyString(root.device.ua),
-  },
-  {
-    id: 'Core-Device-002',
-    description: 'device must contain either ip (IPv4) or ipv6',
-    severity: Severity.ERROR,
-    path: 'BidRequest.device',
-    specRef: 'OpenRTB 2.6 §3.2.18',
-    applies: ({ root }) => !!root?.device,
-    validate: ({ root }) => !!(root.device.ip || root.device.ipv6),
-  },
-  {
-    id: 'Core-Device-004',
-    description: 'device.ipv6 must be a valid IPv6 address',
-    severity: Severity.ERROR,
-    path: 'BidRequest.device.ipv6',
-    specRef: 'OpenRTB 2.6 §3.2.18',
-    applies: ({ root }) => !!root?.device?.ipv6,
-    validate: ({ root }) => isValidIPv6(root.device.ipv6),
-  },
-  {
-    id: 'Core-Device-005',
-    description: 'device.devicetype must be an integer between 1-7',
-    severity: Severity.ERROR,
-    path: 'BidRequest.device.devicetype',
-    specRef: 'OpenRTB 2.6 §3.2.18',
-    applies: ({ root }) => !!root?.device,
-    validate: ({ root }) => Number.isInteger(root.device.devicetype) && root.device.devicetype >= 1 && root.device.devicetype <= 7,
-  },
-  {
-    id: 'Core-Device-006',
-    description: 'device.geo object must be present',
-    severity: Severity.ERROR,
-    path: 'BidRequest.device.geo',
-    specRef: 'OpenRTB 2.6 §3.2.18',
-    applies: ({ root }) => !!root?.device,
-    validate: ({ root }) => !!root.device.geo,
-  },
-  {
-    id: 'Core-Device-007',
-    description: 'device.geo.country must be present and be a string',
-    severity: Severity.ERROR,
-    path: 'BidRequest.device.geo.country',
-    specRef: 'OpenRTB 2.6 §3.2.18',
-    applies: ({ root }) => !!root?.device?.geo,
-    validate: ({ root }) => isNonEmptyString(root.device.geo.country),
-  },
-  {
-    id: 'Core-Device-008',
-    description: 'device.geo.country must be a valid ISO 3166-1 Alpha-3 code',
-    severity: Severity.ERROR,
-    path: 'BidRequest.device.geo.country',
-    specRef: 'OpenRTB 2.6 §3.2.18',
-    applies: ({ root }) => !!root?.device?.geo?.country,
-    validate: ({ root }) => root.device.geo.country.length === 3,
-  },
-  {
-    id: 'Core-Device-009',
-    description: 'device.ifa (ID for Advertising) should be present unless lmt=1',
-    severity: Severity.WARNING,
-    path: 'BidRequest.device.ifa',
-    specRef: 'OpenRTB 2.6 §3.2.18',
-    applies: ({ root }) => !!root?.device && root.device.lmt !== 1,
-    validate: ({ root }) => !!root.device.ifa && root.device.ifa !== '00000000-0000-0000-0000-000000000000',
-  },
-  {
-    id: 'EQ-GOOD-001',
-    description: 'IPv6 detected - better for privacy',
-    severity: Severity.INFO,
-    path: 'BidRequest.device.ipv6',
-    applies: ({ root }) => !!root?.device?.ipv6 && !root.device.ip,
-    validate: ({ root }) => false, // Always fires when IPv6 only
-  },
-  {
-    id: 'EQ-Device-040',
-    description: 'Invalid latitude detected',
-    severity: Severity.ERROR,
-    path: 'BidRequest.device.geo.lat',
-    applies: ({ root }) => !!root?.device?.geo?.lat,
-    validate: ({ root }) => root.device.geo.lat >= -90 && root.device.geo.lat <= 90,
+    path: 'imp[].audio.stitch',
+    applies: ({ inventory }) => inventory.has('audio'),
+    validate: ({ root }) =>
+      root.imp.every((imp: any) => !imp.audio || imp.audio.stitch === undefined ||
+        imp.audio.stitch === 0 || imp.audio.stitch === 1),
   },
 ];
 
@@ -1009,120 +696,6 @@ const videoRules: Rule[] = [
     validate: ({ root }) =>
       root.imp.every((imp: any) => !imp.video || imp.video.startdelay === undefined || Number.isInteger(imp.video.startdelay)),
   },
-  {
-    id: 'Video-V-001',
-    description: 'video.mimes must be present and be a non-empty array of strings',
-    severity: Severity.ERROR,
-    path: 'BidRequest.imp[].video.mimes',
-    applies: ({ inventory }) => inventory.has('video'),
-    validate: ({ root }) =>
-      root.imp.every((imp: any) => !imp.video ||
-        (Array.isArray(imp.video.mimes) && imp.video.mimes.length > 0 &&
-         imp.video.mimes.every((mime: any) => typeof mime === 'string'))),
-  },
-  {
-    id: 'Video-V-002',
-    description: 'video.mimes must contain only strings',
-    severity: Severity.ERROR,
-    path: 'BidRequest.imp[].video.mimes',
-    applies: ({ inventory }) => inventory.has('video'),
-    validate: ({ root }) =>
-      root.imp.every((imp: any) => !imp.video || !Array.isArray(imp.video.mimes) ||
-        imp.video.mimes.every((mime: any) => typeof mime === 'string')),
-  },
-  {
-    id: 'Video-V-003',
-    description: 'video.mimes should typically include "video/mp4"',
-    severity: Severity.WARNING,
-    path: 'BidRequest.imp[].video.mimes',
-    applies: ({ inventory }) => inventory.has('video'),
-    validate: ({ root }) =>
-      root.imp.every((imp: any) => !imp.video || !Array.isArray(imp.video.mimes) ||
-        imp.video.mimes.includes('video/mp4')),
-  },
-  {
-    id: 'Video-V-004',
-    description: 'video.minduration must be present and be an integer',
-    severity: Severity.ERROR,
-    path: 'BidRequest.imp[].video.minduration',
-    applies: ({ inventory }) => inventory.has('video'),
-    validate: ({ root }) =>
-      root.imp.every((imp: any) => !imp.video || Number.isInteger(imp.video.minduration)),
-  },
-  {
-    id: 'Video-V-005',
-    description: 'video.maxduration must be present and be an integer',
-    severity: Severity.ERROR,
-    path: 'BidRequest.imp[].video.maxduration',
-    applies: ({ inventory }) => inventory.has('video'),
-    validate: ({ root }) =>
-      root.imp.every((imp: any) => !imp.video || Number.isInteger(imp.video.maxduration)),
-  },
-  {
-    id: 'Video-V-006',
-    description: 'video.maxduration must be greater than or equal to minduration',
-    severity: Severity.ERROR,
-    path: 'BidRequest.imp[].video',
-    applies: ({ inventory }) => inventory.has('video'),
-    validate: ({ root }) =>
-      root.imp.every((imp: any) => !imp.video || !imp.video.minduration || !imp.video.maxduration ||
-        imp.video.maxduration >= imp.video.minduration),
-  },
-  {
-    id: 'Video-V-007',
-    description: 'video.protocols must be present and be a non-empty array of integers',
-    severity: Severity.ERROR,
-    path: 'BidRequest.imp[].video.protocols',
-    applies: ({ inventory }) => inventory.has('video'),
-    validate: ({ root }) =>
-      root.imp.every((imp: any) => !imp.video || 
-        (Array.isArray(imp.video.protocols) && imp.video.protocols.length > 0)),
-  },
-  {
-    id: 'Video-V-008',
-    description: 'video.w (width) must be present and be a positive integer',
-    severity: Severity.ERROR,
-    path: 'BidRequest.imp[].video.w',
-    applies: ({ inventory }) => inventory.has('video'),
-    validate: ({ root }) =>
-      root.imp.every((imp: any) => !imp.video || (Number.isInteger(imp.video.w) && imp.video.w > 0)),
-  },
-  {
-    id: 'Video-V-009',
-    description: 'video.h (height) must be present and be a positive integer',
-    severity: Severity.ERROR,
-    path: 'BidRequest.imp[].video.h',
-    applies: ({ inventory }) => inventory.has('video'),
-    validate: ({ root }) =>
-      root.imp.every((imp: any) => !imp.video || (Number.isInteger(imp.video.h) && imp.video.h > 0)),
-  },
-  {
-    id: 'Video-V-010',
-    description: 'video.linearity must be present and be an integer',
-    severity: Severity.ERROR,
-    path: 'BidRequest.imp[].video.linearity',
-    applies: ({ inventory }) => inventory.has('video'),
-    validate: ({ root }) =>
-      root.imp.every((imp: any) => !imp.video || Number.isInteger(imp.video.linearity)),
-  },
-  {
-    id: 'Video-V-011',
-    description: 'video.placement must be present and be an integer',
-    severity: Severity.ERROR,
-    path: 'BidRequest.imp[].video.placement',
-    applies: ({ inventory }) => inventory.has('video'),
-    validate: ({ root }) =>
-      root.imp.every((imp: any) => !imp.video || Number.isInteger(imp.video.placement)),
-  },
-  {
-    id: 'Video-V-012',
-    description: 'video.startdelay must be an integer',
-    severity: Severity.ERROR,
-    path: 'BidRequest.imp[].video.startdelay',
-    applies: ({ inventory }) => inventory.has('video'),
-    validate: ({ root }) =>
-      root.imp.every((imp: any) => !imp.video || imp.video.startdelay === undefined || Number.isInteger(imp.video.startdelay)),
-  },
 ];
 
 const bannerRules: Rule[] = [
@@ -1173,20 +746,6 @@ const bannerRules: Rule[] = [
 ];
 
 const nativeRules: Rule[] = [
-  {
-    id: 'native-json',
-    description: 'imp.native.request must be valid JSON.',
-    severity: Severity.ERROR,
-    path: 'imp[].native.request',
-    specRef: 'IAB Native 1.2 §4',
-    applies: ({ inventory }) => inventory.has('native'),
-    validate: ({ root }) =>
-      root.imp.every((imp: any) => {
-        if (!imp.native) return true;
-        if (!isNonEmptyString(imp.native.request)) return false;
-        return safeJsonParse(imp.native.request).ok;
-      }),
-  },
   {
     id: 'Native-N-001',
     description: 'native.request must be present and be a string',
@@ -1595,7 +1154,7 @@ const advancedRules: Rule[] = [
     description: 'device.ext.is_app=1 but no app object present',
     severity: Severity.ERROR,
     path: 'BidRequest',
-    applies: ({ root }) => !!root?.device?.ext?.is_app === 1,
+    applies: ({ root }) => !!root?.device?.ext?.is_app && root.device.ext.is_app === 1,
     validate: ({ root }) => !!root.app,
   },
   {
@@ -1603,7 +1162,7 @@ const advancedRules: Rule[] = [
     description: 'device.ext.is_app=0 but no site object present',
     severity: Severity.ERROR,
     path: 'BidRequest',
-    applies: ({ root }) => !!root?.device?.ext?.is_app === 0,
+    applies: ({ root }) => !!root?.device?.ext?.is_app && root.device.ext.is_app === 0,
     validate: ({ root }) => !!root.site,
   },
   {
@@ -1653,8 +1212,9 @@ const allRuleSets = [
   siteRules,
   deviceRules,
   videoRules,
-  bannerRules,
+  audioRules,
   nativeRules,
+  bannerRules,
   ctvRules,
   doohRules,
   sharethroughRules,
@@ -1760,12 +1320,37 @@ export function analyse(
   }
 
   // Derive summary
-  const mediaFormats = Array.from(ctx.inventory);
+  const mediaFormats = Array.from(ctx.inventory).map(format => {
+    // Add extra format detection
+    if (format === 'audio' && root?.imp) {
+      const hasAAC = root.imp.some((imp: any) => 
+        imp.audio?.mimes?.includes('audio/aac')
+      );
+      if (hasAAC) return ['audio', 'AAC'];
+    }
+    
+    if (format === 'native' && root?.imp) {
+      const hasVideoAd = root.imp.some((imp: any) => {
+        if (!imp.native?.request) return false;
+        try {
+          const nativeRequest = JSON.parse(imp.native.request);
+          return nativeRequest.assets?.some((asset: any) => asset.video);
+        } catch {
+          return false;
+        }
+      });
+      if (hasVideoAd) return ['native', 'Video-Ad'];
+    }
+    
+    return [format];
+  }).flat();
+
   const requestType: AnalysisSummary['requestType'] =
     mediaFormats.length === 1
-      ? (mediaFormats[0].charAt(0).toUpperCase() + mediaFormats[0].slice(1)) as any
+      ? ({ banner: 'Banner', video: 'Video', audio: 'Audio', native: 'Native' }[mediaFormats[0] as any] || 'Unknown')
       : mediaFormats.length > 1
       ? 'Mixed' : 'Unknown';
+
   const platform = root?.app ? 'App' : root?.site ? 'Site' : 'Unknown';
   const impressions = Array.isArray(root?.imp) ? root.imp.length : 0;
   const deviceType = DEVICE_TYPE[root?.device?.devicetype] || 'Unknown';
