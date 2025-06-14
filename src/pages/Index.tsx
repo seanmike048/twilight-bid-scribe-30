@@ -1,5 +1,5 @@
 
-import React, { useState, useCallback, useReducer } from 'react';
+import React, { useState, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -12,55 +12,6 @@ import { ValidationResults } from '@/components/ValidationResults';
 import { BulkAnalysis } from '@/components/BulkAnalysis';
 import { FileUpload } from '@/components/FileUpload';
 
-// --- STATE MANAGEMENT ---
-type AppState = {
-  mode: 'single' | 'bulk';
-  isLoading: boolean;
-  jsonText: string;
-  analysisResult: AnalysisResult | null;
-  validationIssues: ValidationIssue[];
-  fileName: string;
-  bulkRequests: any[];
-};
-
-type AppAction =
-  | { type: 'SET_MODE'; payload: 'single' | 'bulk' }
-  | { type: 'START_ANALYSIS' }
-  | { type: 'SET_SINGLE_RESULT'; payload: { analysis: AnalysisResult | null; issues: ValidationIssue[] } }
-  | { type: 'SET_JSON_TEXT'; payload: string }
-  | { type: 'SET_BULK_DATA'; payload: { fileName: string; requests: any[] } }
-  | { type: 'CLEAR_SINGLE' };
-
-const initialState: AppState = {
-  mode: 'single',
-  isLoading: false,
-  jsonText: exampleBidRequests['display'],
-  analysisResult: null,
-  validationIssues: [],
-  fileName: '',
-  bulkRequests: [],
-};
-
-function appReducer(state: AppState, action: AppAction): AppState {
-  switch (action.type) {
-    case 'SET_MODE':
-      return { ...initialState, jsonText: '', mode: action.payload };
-    case 'START_ANALYSIS':
-      return { ...state, isLoading: true };
-    case 'SET_JSON_TEXT':
-      return { ...state, jsonText: action.payload, analysisResult: null, validationIssues: [] };
-    case 'SET_SINGLE_RESULT':
-      return { ...state, isLoading: false, analysisResult: action.payload.analysis, validationIssues: action.payload.issues };
-    case 'SET_BULK_DATA':
-      return { ...state, isLoading: false, mode: 'bulk', fileName: action.payload.fileName, bulkRequests: action.payload.requests, jsonText: '', analysisResult: null, validationIssues: [] };
-    case 'CLEAR_SINGLE':
-       return { ...state, jsonText: '', analysisResult: null, validationIssues: [] };
-    default:
-      return state;
-  }
-}
-
-// --- UI SUB-COMPONENTS ---
 const Header = ({ mode, setMode }: { mode: 'single' | 'bulk', setMode: (m: 'single' | 'bulk') => void }) => (
     <header className="flex justify-between items-center mb-8">
         <div className="flex items-center space-x-3">
@@ -89,13 +40,15 @@ const Header = ({ mode, setMode }: { mode: 'single' | 'bulk', setMode: (m: 'sing
 );
 
 const JsonEditor = ({ jsonText, onTextChange }: { jsonText: string; onTextChange: (text: string) => void }) => (
-    <textarea
-        value={jsonText}
-        onChange={(e) => onTextChange(e.target.value)}
-        placeholder="Paste your OpenRTB bid request here..."
-        className="w-full h-full min-h-[400px] p-4 font-mono text-sm bg-slate-900 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500 text-slate-300 resize-none border border-slate-700"
-        spellCheck="false"
-    />
+    <div className="h-full min-h-[400px] max-h-[500px] overflow-hidden">
+        <textarea
+            value={jsonText}
+            onChange={(e) => onTextChange(e.target.value)}
+            placeholder="Paste your OpenRTB bid request here..."
+            className="w-full h-full p-4 font-mono text-sm bg-slate-900 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500 text-slate-300 resize-none border border-slate-700 overflow-y-auto"
+            spellCheck="false"
+        />
+    </div>
 );
 
 const ExamplesDropdown = ({ onLoadExample }: { onLoadExample: (key: keyof typeof exampleBidRequests) => void }) => (
@@ -118,114 +71,182 @@ const ExamplesDropdown = ({ onLoadExample }: { onLoadExample: (key: keyof typeof
     </DropdownMenu>
 );
 
-// --- MAIN PAGE ---
 export default function IndexPage() {
-    const [state, dispatch] = useReducer(appReducer, initialState);
+    const [mode, setMode] = useState<'single' | 'bulk'>('single');
+    const [isLoading, setIsLoading] = useState(false);
+    const [jsonText, setJsonText] = useState(exampleBidRequests['display']);
+    const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
+    const [validationIssues, setValidationIssues] = useState<ValidationIssue[]>([]);
+    const [fileName, setFileName] = useState('');
+    const [bulkRequests, setBulkRequests] = useState<any[]>([]);
 
-    const handleAnalyze = useCallback(() => {
-        if (!state.jsonText.trim()) {
+    const handleAnalyze = useCallback(async () => {
+        if (!jsonText.trim()) {
             toast.error("Input is empty.");
             return;
         }
-        dispatch({ type: 'START_ANALYSIS' });
+        
+        setIsLoading(true);
+        
+        // Add small delay for better UX
         setTimeout(() => {
-            const { analysis, issues } = analyzer.analyze(state.jsonText);
-            dispatch({ type: 'SET_SINGLE_RESULT', payload: { analysis, issues } });
+            const { analysis, issues } = analyzer.analyze(jsonText);
+            setAnalysisResult(analysis);
+            setValidationIssues(issues);
+            setIsLoading(false);
+            
             if (analysis && !analysis.error) {
                 toast.success("Analysis complete!", { description: `${issues.length} issue(s) found.` });
             } else {
                 toast.error(analysis?.error || "An unknown analysis error occurred.");
             }
         }, 300);
-    }, [state.jsonText]);
+    }, [jsonText]);
 
     const handleLoadExample = useCallback((key: keyof typeof exampleBidRequests) => {
-        dispatch({ type: 'SET_JSON_TEXT', payload: exampleBidRequests[key] });
+        setJsonText(exampleBidRequests[key]);
+        setAnalysisResult(null);
+        setValidationIssues([]);
     }, []);
 
     const handleFormat = useCallback(() => {
         try {
-            const parsed = JSON.parse(state.jsonText);
-            dispatch({ type: 'SET_JSON_TEXT', payload: JSON.stringify(parsed, null, 2) });
+            const parsed = JSON.parse(jsonText);
+            setJsonText(JSON.stringify(parsed, null, 2));
         } catch {
             toast.error("Cannot format invalid JSON.");
         }
-    }, [state.jsonText]);
+    }, [jsonText]);
 
     const handleFileUpload = useCallback((file: File) => {
-        dispatch({ type: 'START_ANALYSIS' });
+        setIsLoading(true);
         const reader = new FileReader();
+        
         reader.onload = (event) => {
             try {
                 const text = event.target?.result as string;
                 const requests = text.split('\n').filter(line => line.trim()).map(line => JSON.parse(line));
-                dispatch({ type: 'SET_BULK_DATA', payload: { fileName: file.name, requests } });
+                
+                setMode('bulk');
+                setFileName(file.name);
+                setBulkRequests(requests);
+                setIsLoading(false);
+                
                 toast.success(`${requests.length} requests loaded from ${file.name}`);
             } catch (e) {
-                 dispatch({ type: 'SET_SINGLE_RESULT', payload: { 
-                     analysis: { 
-                         summary: {
-                             requestType: 'Unknown', 
-                             mediaFormats: [], 
-                             impressions: 0, 
-                             platform: 'Unknown', 
-                             deviceType: 'Unknown', 
-                             geo: 'N/A'
-                         },
-                         issues: [],
-                         request: undefined,
-                         error: 'Failed to parse log file. Ensure it contains one valid JSON per line.'
-                     }, 
-                     issues: [] 
-                 } });
+                setIsLoading(false);
+                setAnalysisResult({ 
+                    summary: {
+                        requestType: 'Unknown', 
+                        mediaFormats: [], 
+                        impressions: 0, 
+                        platform: 'Unknown', 
+                        deviceType: 'Unknown', 
+                        geo: 'N/A'
+                    },
+                    issues: [],
+                    request: undefined,
+                    error: 'Failed to parse log file. Ensure it contains one valid JSON per line.'
+                });
+                setValidationIssues([]);
+                toast.error('Failed to parse log file');
             }
         };
+        
         reader.readAsText(file);
     }, []);
 
-    const handleSelectRequestFromBulk = useCallback((request: any) => {
-        dispatch({ type: 'SET_MODE', payload: 'single' });
-        // Use a timeout to ensure the UI switches before setting the text and analyzing
+    const handleRequestSelection = useCallback((request: any) => {
+        setMode('single');
+        setJsonText(JSON.stringify(request, null, 2));
+        setAnalysisResult(null);
+        setValidationIssues([]);
+        
+        // Auto-analyze the selected request
         setTimeout(() => {
-            dispatch({ type: 'SET_JSON_TEXT', payload: JSON.stringify(request, null, 2) });
-        }, 0);
+            const { analysis, issues } = analyzer.analyze(JSON.stringify(request, null, 2));
+            setAnalysisResult(analysis);
+            setValidationIssues(issues);
+        }, 100);
+    }, []);
+
+    const handleClear = useCallback(() => {
+        setJsonText('');
+        setAnalysisResult(null);
+        setValidationIssues([]);
+    }, []);
+
+    const switchMode = useCallback((newMode: 'single' | 'bulk') => {
+        setMode(newMode);
+        if (newMode === 'single') {
+            setJsonText('');
+            setAnalysisResult(null);
+            setValidationIssues([]);
+        } else {
+            setBulkRequests([]);
+            setFileName('');
+        }
     }, []);
 
     return (
         <div className="min-h-screen bg-[#0c111d] text-slate-200 font-sans">
             <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-                <Header mode={state.mode} setMode={(m) => dispatch({ type: 'SET_MODE', payload: m })} />
+                <Header mode={mode} setMode={switchMode} />
+                
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
                     <div className="lg:col-span-5 flex flex-col space-y-4">
-                        {state.mode === 'single' ? (
+                        {mode === 'single' ? (
                             <Card className="bg-slate-900 border-slate-800 flex flex-col h-full">
                                 <CardHeader className="flex flex-row items-center justify-between py-4 px-6 border-b border-slate-800">
-                                    <CardTitle className="text-lg flex items-center"><FileText className="w-5 h-5 mr-2 text-orange-400" />Bid Request Input</CardTitle>
+                                    <CardTitle className="text-lg flex items-center">
+                                        <FileText className="w-5 h-5 mr-2 text-orange-400" />
+                                        Bid Request Input
+                                    </CardTitle>
                                     <div className="flex items-center space-x-2">
                                         <Button variant="outline" size="sm" onClick={handleFormat}>Format</Button>
                                         <ExamplesDropdown onLoadExample={handleLoadExample} />
                                     </div>
                                 </CardHeader>
                                 <CardContent className="p-2 flex-grow">
-                                    <JsonEditor jsonText={state.jsonText} onTextChange={(text) => dispatch({ type: 'SET_JSON_TEXT', payload: text })} />
+                                    <JsonEditor jsonText={jsonText} onTextChange={setJsonText} />
                                 </CardContent>
                                 <div className="p-4 border-t border-slate-800 flex items-center space-x-4">
-                                    <Button onClick={handleAnalyze} disabled={state.isLoading || !state.jsonText} className="w-full bg-orange-500 hover:bg-orange-600 text-slate-900 font-bold py-3 text-base">
-                                        {state.isLoading ? <div className="animate-spin w-5 h-5 border-2 border-current border-t-transparent rounded-full mr-2" /> : <Play className="w-5 h-5 mr-2" />}
-                                        {state.isLoading ? 'Analyzing...' : 'Analyze Request'}
+                                    <Button 
+                                        onClick={handleAnalyze} 
+                                        disabled={isLoading || !jsonText} 
+                                        className="w-full bg-orange-500 hover:bg-orange-600 text-slate-900 font-bold py-3 text-base"
+                                    >
+                                        {isLoading ? (
+                                            <div className="animate-spin w-5 h-5 border-2 border-current border-t-transparent rounded-full mr-2" />
+                                        ) : (
+                                            <Play className="w-5 h-5 mr-2" />
+                                        )}
+                                        {isLoading ? 'Analyzing...' : 'Analyze Request'}
                                     </Button>
-                                    <Button variant="outline" onClick={() => dispatch({ type: 'CLEAR_SINGLE' })}><Trash2 className="w-5 h-5"/></Button>
+                                    <Button variant="outline" onClick={handleClear}>
+                                        <Trash2 className="w-5 h-5"/>
+                                    </Button>
                                 </div>
                             </Card>
                         ) : (
                             <FileUpload onFileUpload={handleFileUpload} />
                         )}
                     </div>
+                    
                     <div className="lg:col-span-7">
-                        {state.mode === 'single' ? (
-                            <ValidationResults analysis={state.analysisResult} issues={state.validationIssues} isLoading={state.isLoading} />
+                        {mode === 'single' ? (
+                            <ValidationResults 
+                                analysis={analysisResult} 
+                                issues={validationIssues} 
+                                isLoading={isLoading} 
+                            />
                         ) : (
-                            <BulkAnalysis data={state.bulkRequests} fileName={state.fileName} onRequestSelect={handleSelectRequestFromBulk} />
+                            <BulkAnalysis 
+                                data={bulkRequests} 
+                                fileName={fileName}
+                                onRequestSelect={handleRequestSelection} 
+                                isLoading={isLoading}
+                            />
                         )}
                     </div>
                 </div>
