@@ -193,7 +193,7 @@ export const ValidationResults: React.FC<Props> = ({ analysis, issues, isLoading
                     <div className="flex-1">
                       <p className="font-semibold">{issue.message}</p>
                       <p className="text-xs opacity-70 font-mono mt-1">
-                        Rule: {issue.id} • Path: {issue.path}
+                        Path: {issue.path}
                       </p>
                     </div>
                   </div>

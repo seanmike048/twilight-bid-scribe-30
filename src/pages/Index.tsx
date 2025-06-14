@@ -40,15 +40,13 @@ const Header = ({ mode, setMode }: { mode: 'single' | 'bulk', setMode: (m: 'sing
 );
 
 const JsonEditor = ({ jsonText, onTextChange }: { jsonText: string; onTextChange: (text: string) => void }) => (
-    <div className="h-full min-h-[400px] max-h-[500px] overflow-hidden">
-        <textarea
-            value={jsonText}
-            onChange={(e) => onTextChange(e.target.value)}
-            placeholder="Paste your OpenRTB bid request here..."
-            className="w-full h-full p-4 font-mono text-sm bg-slate-900 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500 text-slate-300 resize-none border border-slate-700 overflow-y-auto"
-            spellCheck="false"
-        />
-    </div>
+    <textarea
+        value={jsonText}
+        onChange={(e) => onTextChange(e.target.value)}
+        placeholder="Paste your OpenRTB bid request here..."
+        className="w-full h-full p-4 font-mono text-sm bg-slate-900 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500 text-slate-300 resize-none border border-slate-700 overflow-y-auto"
+        spellCheck="false"
+    />
 );
 
 const ExamplesDropdown = ({ onLoadExample }: { onLoadExample: (key: keyof typeof exampleBidRequests) => void }) => (
@@ -193,11 +191,11 @@ export default function IndexPage() {
             <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
                 <Header mode={mode} setMode={switchMode} />
                 
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-                    <div className="lg:col-span-5 flex flex-col space-y-4">
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 h-[calc(100vh-12rem)]">
+                    <div className="lg:col-span-5 flex flex-col space-y-4 h-full">
                         {mode === 'single' ? (
-                            <Card className="bg-slate-900 border-slate-800 flex flex-col h-full">
-                                <CardHeader className="flex flex-row items-center justify-between py-4 px-6 border-b border-slate-800">
+                            <Card className="bg-slate-900 border-slate-800 flex flex-col flex-grow h-full">
+                                <CardHeader className="flex flex-row items-center justify-between py-4 px-6 border-b border-slate-800 flex-shrink-0">
                                     <CardTitle className="text-lg flex items-center">
                                         <FileText className="w-5 h-5 mr-2 text-orange-400" />
                                         Bid Request Input
@@ -207,10 +205,10 @@ export default function IndexPage() {
                                         <ExamplesDropdown onLoadExample={handleLoadExample} />
                                     </div>
                                 </CardHeader>
-                                <CardContent className="p-2 flex-grow">
+                                <CardContent className="p-2 flex-grow overflow-hidden">
                                     <JsonEditor jsonText={jsonText} onTextChange={setJsonText} />
                                 </CardContent>
-                                <div className="p-4 border-t border-slate-800 flex items-center space-x-4">
+                                <div className="p-4 border-t border-slate-800 flex items-center space-x-4 flex-shrink-0">
                                     <Button 
                                         onClick={handleAnalyze} 
                                         disabled={isLoading || !jsonText} 
@@ -233,7 +231,7 @@ export default function IndexPage() {
                         )}
                     </div>
                     
-                    <div className="lg:col-span-7">
+                    <div className="lg:col-span-7 h-full">
                         {mode === 'single' ? (
                             <ValidationResults 
                                 analysis={analysisResult} 
