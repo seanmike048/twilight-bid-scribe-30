@@ -1,3 +1,4 @@
+
 /**
  * src/lib/analyzer.ts
  * ------------------
@@ -682,7 +683,7 @@ const videoRules: Rule[] = [
     id: 'EQ-Video-049',
     description: 'imp.video.startdelay is recommended',
     severity: Severity.WARNING,
-    path: 'BidRequest.imp[].video.startdelay',
+    path: '  BidRequest.imp[].video.startdelay',
     applies: ({ inventory }) => inventory.has('video'),
     validate: ({ root }) =>
       root.imp.every((imp: any) => !imp.video || imp.video.startdelay !== undefined),
@@ -837,6 +838,279 @@ const nativeRules: Rule[] = [
         if (!imp.native?.request) return true;
         return safeJsonParse(imp.native.request).ok;
       }),
+  },
+];
+
+const appRules: Rule[] = [
+  {
+    id: 'Core-App-003',
+    description: 'app.id must be present and be a non-empty string',
+    severity: Severity.ERROR,
+    path: 'BidRequest.app.id',
+    specRef: 'OpenRTB 2.6 §3.2.14',
+    applies: ({ root }) => !!root?.app,
+    validate: ({ root }) => isNonEmptyString(root.app.id),
+  },
+  {
+    id: 'Core-App-004',
+    description: 'app.bundle must be present and be a non-empty string',
+    severity: Severity.ERROR,
+    path: 'BidRequest.app.bundle',
+    specRef: 'OpenRTB 2.6 §3.2.14',
+    applies: ({ root }) => !!root?.app,
+    validate: ({ root }) => isNonEmptyString(root.app.bundle),
+  },
+  {
+    id: 'Core-App-005',
+    description: 'app.storeurl must be present and be a non-empty string',
+    severity: Severity.ERROR,
+    path: 'BidRequest.app.storeurl',
+    specRef: 'OpenRTB 2.6 §3.2.14',
+    applies: ({ root }) => !!root?.app,
+    validate: ({ root }) => isNonEmptyString(root.app.storeurl),
+  },
+  {
+    id: 'Core-App-006',
+    description: 'app.publisher must be present',
+    severity: Severity.ERROR,
+    path: 'BidRequest.app.publisher',
+    specRef: 'OpenRTB 2.6 §3.2.14',
+    applies: ({ root }) => !!root?.app,
+    validate: ({ root }) => !!root.app.publisher,
+  },
+  {
+    id: 'EQ-App-017',
+    description: 'app.name must be present and be a non-empty string',
+    severity: Severity.ERROR,
+    path: 'BidRequest.app.name',
+    applies: ({ root }) => !!root?.app,
+    validate: ({ root }) => isNonEmptyString(root.app.name),
+  },
+  {
+    id: 'EQ-App-019',
+    description: 'app.storeurl contains unresolved macros',
+    severity: Severity.ERROR,
+    path: 'BidRequest.app.storeurl',
+    applies: ({ root }) => !!root?.app?.storeurl,
+    validate: ({ root }) => !containsMacros(root.app.storeurl),
+  },
+  {
+    id: 'EQ-App-020',
+    description: 'app.bundle contains unresolved macros',
+    severity: Severity.ERROR,
+    path: 'BidRequest.app.bundle',
+    applies: ({ root }) => !!root?.app?.bundle,
+    validate: ({ root }) => !containsMacros(root.app.bundle),
+  },
+];
+
+const siteRules: Rule[] = [
+  {
+    id: 'Core-Site-001',
+    description: 'site.id must be present and be a non-empty string',
+    severity: Severity.ERROR,
+    path: 'BidRequest.site.id',
+    specRef: 'OpenRTB 2.6 §3.2.13',
+    applies: ({ root }) => !!root?.site,
+    validate: ({ root }) => isNonEmptyString(root.site.id),
+  },
+  {
+    id: 'Core-Site-003',
+    description: 'site.domain must be present and be a non-empty string',
+    severity: Severity.ERROR,
+    path: 'BidRequest.site.domain',
+    specRef: 'OpenRTB 2.6 §3.2.13',
+    applies: ({ root }) => !!root?.site,
+    validate: ({ root }) => isNonEmptyString(root.site.domain),
+  },
+  {
+    id: 'Core-Site-004',
+    description: 'site.publisher must be present',
+    severity: Severity.ERROR,
+    path: 'BidRequest.site.publisher',
+    specRef: 'OpenRTB 2.6 §3.2.13',
+    applies: ({ root }) => !!root?.site,
+    validate: ({ root }) => !!root.site.publisher,
+  },
+];
+
+const deviceRules: Rule[] = [
+  {
+    id: 'Core-Device-004',
+    description: 'device.ua must be present and be a non-empty string',
+    severity: Severity.ERROR,
+    path: 'BidRequest.device.ua',
+    specRef: 'OpenRTB 2.6 §3.2.18',
+    applies: ({ root }) => !!root?.device,
+    validate: ({ root }) => isNonEmptyString(root.device.ua),
+  },
+  {
+    id: 'Core-Device-005',
+    description: 'device.ip must be present and be a valid IP address',
+    severity: Severity.ERROR,
+    path: 'BidRequest.device.ip',
+    specRef: 'OpenRTB 2.6 §3.2.18',
+    applies: ({ root }) => !!root?.device,
+    validate: ({ root }) => {
+      const ip = root.device.ip;
+      return isNonEmptyString(ip) && (isValidIPv4(ip) || isValidIPv6(ip));
+    },
+  },
+  {
+    id: 'Core-Device-006',
+    description: 'device.devicetype must be present and be an integer',
+    severity: Severity.ERROR,
+    path: 'BidRequest.device.devicetype',
+    specRef: 'OpenRTB 2.6 §3.2.18',
+    applies: ({ root }) => !!root?.device,
+    validate: ({ root }) => Number.isInteger(root.device.devicetype),
+  },
+  {
+    id: 'Core-Device-007',
+    description: 'device.lmt must be 0 or 1',
+    severity: Severity.ERROR,
+    path: 'BidRequest.device.lmt',
+    applies: ({ root }) => !!root?.device && root.device.lmt !== undefined,
+    validate: ({ root }) => root.device.lmt === 0 || root.device.lmt === 1,
+  },
+  {
+    id: 'Core-Device-008',
+    description: 'device.dnt must be 0 or 1',
+    severity: Severity.ERROR,
+    path: 'BidRequest.device.dnt',
+    applies: ({ root }) => !!root?.device && root.device.dnt !== undefined,
+    validate: ({ root }) => root.device.dnt === 0 || root.device.dnt === 1,
+  },
+  {
+    id: 'Core-Device-009',
+    description: 'Detected truncated IP address',
+    severity: Severity.WARNING,
+    path: 'BidRequest.device.ip',
+    applies: ({ root }) => !!root?.device?.ip,
+    validate: ({ root }) => {
+      const ip = root.device.ip;
+      if (isValidIPv4(ip)) return !isTruncatedIP(ip);
+      if (isValidIPv6(ip)) return !isTruncatedIPv6(ip);
+      return true;
+    },
+  },
+  {
+    id: 'EQ-Device-022',
+    description: 'device.make must be present and be a non-empty string',
+    severity: Severity.ERROR,
+    path: 'BidRequest.device.make',
+    applies: ({ root }) => !!root?.device,
+    validate: ({ root }) => isNonEmptyString(root.device.make),
+  },
+  {
+    id: 'EQ-Device-023',
+    description: 'device.model must be present and be a non-empty string',
+    severity: Severity.ERROR,
+    path: 'BidRequest.device.model',
+    applies: ({ root }) => !!root?.device,
+    validate: ({ root }) => isNonEmptyString(root.device.model),
+  },
+  {
+    id: 'EQ-Device-024',
+    description: 'Country continent mismatch with datacenter continent',
+    severity: Severity.WARNING,
+    path: 'BidRequest.device.geo.country',
+    applies: ({ root }) => !!root?.device?.geo?.country && !!root?.ext?.auctionDatacenterId,
+    validate: ({ root }) => {
+      // This validation is handled by validateCountryDatacenterMatch helper
+      return true; // The helper function adds issues directly
+    },
+  },
+  {
+    id: 'EQ-Device-025',
+    description: 'device.os must be present and be a non-empty string',
+    severity: Severity.ERROR,
+    path: 'BidRequest.device.os',
+    applies: ({ root }) => !!root?.device,
+    validate: ({ root }) => isNonEmptyString(root.device.os),
+  },
+  {
+    id: 'EQ-Device-026',
+    description: 'device.ifa must be present for mobile devices',
+    severity: Severity.ERROR,
+    path: 'BidRequest.device.ifa',
+    applies: ({ root }) => !!root?.device && (root.device.devicetype === 1 || root.device.devicetype === 4),
+    validate: ({ root }) => isNonEmptyString(root.device.ifa),
+  },
+  {
+    id: 'EQ-Device-027',
+    description: 'device.geo must be present',
+    severity: Severity.ERROR,
+    path: 'BidRequest.device.geo',
+    applies: ({ root }) => !!root?.device,
+    validate: ({ root }) => !!root.device.geo,
+  },
+  {
+    id: 'EQ-Device-028',
+    description: 'device.geo.country must be present and be a non-empty string',
+    severity: Severity.ERROR,
+    path: 'BidRequest.device.geo.country',
+    applies: ({ root }) => !!root?.device?.geo,
+    validate: ({ root }) => isNonEmptyString(root.device.geo.country),
+  },
+  {
+    id: 'EQ-Device-029',
+    description: 'Privacy conflict: device.lmt=1 but device.ifa is present',
+    severity: Severity.ERROR,
+    path: 'BidRequest.device',
+    applies: ({ root }) => !!root?.device && root.device.lmt === 1,
+    validate: ({ root }) => !root.device.ifa,
+  },
+  {
+    id: 'EQ-Device-030',
+    description: 'device.ip appears to be truncated or anonymized',
+    severity: Severity.WARNING,
+    path: 'BidRequest.device.ip',
+    applies: ({ root }) => !!root?.device?.ip,
+    validate: ({ root }) => {
+      const ip = root.device.ip;
+      return !isTruncatedIP(ip) && !isTruncatedIPv6(ip);
+    },
+  },
+  {
+    id: 'EQ-Device-031',
+    description: 'device.connectiontype must be present',
+    severity: Severity.WARNING,
+    path: 'BidRequest.device.connectiontype',
+    applies: ({ root }) => !!root?.device,
+    validate: ({ root }) => root.device.connectiontype !== undefined,
+  },
+  {
+    id: 'EQ-Device-032',
+    description: 'device.w (screen width) should be present for mobile devices',
+    severity: Severity.WARNING,
+    path: 'BidRequest.device.w',
+    applies: ({ root }) => !!root?.device && (root.device.devicetype === 1 || root.device.devicetype === 4),
+    validate: ({ root }) => !!root.device.w,
+  },
+  {
+    id: 'EQ-Device-033',
+    description: 'device.h (screen height) should be present for mobile devices',
+    severity: Severity.WARNING,
+    path: 'BidRequest.device.h',
+    applies: ({ root }) => !!root?.device && (root.device.devicetype === 1 || root.device.devicetype === 4),
+    validate: ({ root }) => !!root.device.h,
+  },
+  {
+    id: 'EQ-Device-034',
+    description: 'device.ppi (pixels per inch) should be present for mobile devices',
+    severity: Severity.INFO,
+    path: 'BidRequest.device.ppi',
+    applies: ({ root }) => !!root?.device && (root.device.devicetype === 1 || root.device.devicetype === 4),
+    validate: ({ root }) => !!root.device.ppi,
+  },
+  {
+    id: 'EQ-Device-035',
+    description: 'device.language should be present',
+    severity: Severity.INFO,
+    path: 'BidRequest.device.language',
+    applies: ({ root }) => !!root?.device,
+    validate: ({ root }) => !!root.device.language,
   },
 ];
 
@@ -1191,17 +1465,6 @@ const advancedRules: Rule[] = [
     validate: ({ root }) =>
       root.user.eids.every((eid: any) => 
         !Array.isArray(eid.uids) || eid.uids.every((uid: any) => !!uid.id)),
-  },
-  {
-    id: 'Advanced-007',
-    description: 'Unrecognised EID sources detected',
-    severity: Severity.WARNING,
-    path: 'BidRequest.user.eids',
-    applies: ({ root }) => !!root?.user?.eids && Array.isArray(root.user.eids),
-    validate: ({ root }) => {
-      const knownSources = ['id5-sync.com', 'uidapi.com', 'adnxs.com', 'liveramp.com'];
-      return root.user.eids.some((eid: any) => knownSources.includes(eid.source));
-    },
   },
 ];
 
