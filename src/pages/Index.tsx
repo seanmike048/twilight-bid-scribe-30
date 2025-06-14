@@ -1,3 +1,4 @@
+
 import React, { useState, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -121,6 +122,23 @@ export default function IndexPage() {
                     if (parsedRequest.source && parsedRequest.source.schain && Array.isArray(parsedRequest.source.schain.nodes)) {
                         summary.schainNodes = parsedRequest.source.schain.nodes.length;
                     }
+
+                    // Add Privacy Signals
+                    const privacySignals: string[] = [];
+                    if (parsedRequest.regs?.gdpr === 1) {
+                        privacySignals.push('GDPR Applicable');
+                    }
+                    if (parsedRequest.user?.ext?.consent) {
+                        privacySignals.push('TCF Consent String');
+                    }
+                    if (parsedRequest.regs?.ext?.us_privacy) {
+                        privacySignals.push('CCPA/US Privacy');
+                    }
+                    if (parsedRequest.regs?.gpp) {
+                        privacySignals.push('Global Privacy Platform (GPP)');
+                    }
+                    summary.privacySignals = privacySignals;
+
                 } catch (e) {
                     // This is a safeguard; analyzer should have already caught invalid JSON.
                     console.error("Could not parse JSON to enhance summary", e);
