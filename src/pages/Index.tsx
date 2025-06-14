@@ -88,6 +88,40 @@ export default function IndexPage() {
         
         setTimeout(() => {
             const { analysis, issues } = analyzer.analyze(jsonText);
+            
+            if (analysis && !analysis.error) {
+                try {
+                    const parsedRequest = JSON.parse(jsonText);
+
+                    // Enhance summary with data the analyzer might have missed
+                    if (!analysis.summary.timeoutMs && parsedRequest.tmax) {
+                        analysis.summary.timeoutMs = parsedRequest.tmax;
+                    }
+
+                    // Top-level currency
+                    if (!analysis.summary.currency && parsedRequest.cur && parsedRequest.cur.length > 0) {
+                        analysis.summary.currency = parsedRequest.cur[0];
+                    }
+
+                    // Impression-level bid floor and currency
+                    if (parsedRequest.imp && parsedRequest.imp.length > 0) {
+                        const firstImp = parsedRequest.imp[0];
+                        if (firstImp.bidfloor && !analysis.summary.bidFloor) {
+                            // Use impression-level currency if available, otherwise fallback to request-level currency
+                            const floorCur = firstImp.bidfloorcur || analysis.summary.currency || '';
+                            analysis.summary.bidFloor = `${firstImp.bidfloor}${floorCur ? ` ${floorCur}` : ''}`;
+                        }
+                        // If request-level currency is missing, try to get it from the impression
+                        if (!analysis.summary.currency && firstImp.bidfloorcur) {
+                            analysis.summary.currency = firstImp.bidfloorcur;
+                        }
+                    }
+                } catch (e) {
+                    // This is a safeguard; analyzer should have already caught invalid JSON.
+                    console.error("Could not parse JSON to enhance summary", e);
+                }
+            }
+            
             setAnalysisResult(analysis);
             setValidationIssues(issues);
             setIsLoading(false);

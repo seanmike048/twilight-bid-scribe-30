@@ -3,7 +3,8 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { 
-  Tv, Monitor, Shield, Tablet, Smartphone, FileSearch,
+  Tv, Monitor, Shield, Tablet, Smartphone, FileCode,
+  Image, Clapperboard, Speaker, Layout
 } from 'lucide-react';
 
 interface AnalysisSummary {
@@ -38,6 +39,18 @@ const DetailItem: React.FC<DetailItemProps> = ({ label, value, children, icon })
   );
 };
 
+const requestTypeIcon = (requestType: string) => {
+  switch (requestType) {
+    case "Banner": return <Image className="w-6 h-6 text-amber-400" />;
+    case "Video": return <Clapperboard className="w-6 h-6 text-amber-400" />;
+    case "Audio": return <Speaker className="w-6 h-6 text-amber-400" />;
+    case "Native": return <Layout className="w-6 h-6 text-amber-400" />;
+    case "Connected TV (CTV)": return <Tv className="w-6 h-6 text-amber-400" />;
+    case "DOOH": return <Monitor className="w-6 h-6 text-amber-400" />;
+    default: return <FileCode className="w-6 h-6 text-amber-400" />;
+  }
+};
+
 const getDeviceIcon = (deviceType: string = "") => {
     const lowerDeviceType = deviceType.toLowerCase();
     if (lowerDeviceType.includes('phone') || lowerDeviceType.includes('mobile')) return <Smartphone className="w-4 h-4 mr-2 text-slate-400" />;
@@ -51,7 +64,7 @@ export const BidRequestSummaryCard: React.FC<{ summary: AnalysisSummary }> = ({ 
   return (
     <Card className="bg-slate-900 border-slate-800 w-full">
       <CardHeader className="flex flex-row items-center gap-3 pb-4">
-        <FileSearch className="w-6 h-6 text-amber-400" />
+        {requestTypeIcon(summary.requestType)}
         <CardTitle className="text-lg text-white font-semibold">Bid Request Analysis</CardTitle>
       </CardHeader>
       <CardContent className="pt-0 pb-4 space-y-4 text-sm">
