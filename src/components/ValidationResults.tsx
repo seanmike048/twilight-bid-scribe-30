@@ -1,9 +1,9 @@
-
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { AlertTriangle, XCircle, Info, CheckCircle, Eye } from 'lucide-react';
 import { AnalysisResult, ValidationIssue } from '@/lib/analyzer';
+import { BidRequestSummaryCard } from './BidRequestSummaryCard';
 
 interface Props {
   analysis: AnalysisResult | null;
@@ -73,45 +73,12 @@ export const ValidationResults: React.FC<Props> = ({ analysis, issues, isLoading
 
   return (
     <div className="space-y-6">
-      {/* Request Characteristics */}
-      <Card className="bg-slate-900 border-slate-800">
-        <CardHeader>
-          <CardTitle className="text-lg text-white">Request Characteristics</CardTitle>
-        </CardHeader>
-        <CardContent className="grid grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-4 text-sm">
-          <div>
-            <p className="text-slate-400">Request Type</p>
-            <p className="font-bold text-lg text-orange-400">{analysis.summary.requestType}</p>
-          </div>
-          <div>
-            <p className="text-slate-400">Impressions</p>
-            <p className="font-bold text-lg text-white">{analysis.summary.impressions}</p>
-          </div>
-          <div>
-            <p className="text-slate-400">Media Formats</p>
-            <p className="font-bold text-white">
-              {Array.isArray(analysis.summary.mediaFormats) 
-                ? analysis.summary.mediaFormats.join(', ') 
-                : analysis.summary.mediaFormats || 'None'}
-            </p>
-          </div>
-          <div>
-            <p className="text-slate-400">Platform</p>
-            <p className="font-bold text-white">{analysis.summary.platform}</p>
-          </div>
-          <div>
-            <p className="text-slate-400">Device Type</p>
-            <p className="font-bold text-white">{analysis.summary.deviceType}</p>
-          </div>
-          <div>
-            <p className="text-slate-400">Geography</p>
-            <p className="font-bold text-white">{analysis.summary.geo}</p>
-          </div>
-        </CardContent>
-      </Card>
+      {/* Bid Request Summary (updated) */}
+      <BidRequestSummaryCard summary={analysis.summary} />
 
       {/* Validation Summary */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        {/* Error Card */}
         <Card className="bg-red-900/20 p-4 border border-red-500/30">
           <div className="flex items-center justify-between">
             <div>
@@ -121,6 +88,7 @@ export const ValidationResults: React.FC<Props> = ({ analysis, issues, isLoading
             <XCircle className="w-8 h-8 text-red-400" />
           </div>
         </Card>
+        {/* Warning Card */}
         <Card className="bg-orange-900/20 p-4 border border-orange-500/30">
           <div className="flex items-center justify-between">
             <div>
@@ -130,6 +98,7 @@ export const ValidationResults: React.FC<Props> = ({ analysis, issues, isLoading
             <AlertTriangle className="w-8 h-8 text-orange-400" />
           </div>
         </Card>
+        {/* Info Card */}
         <Card className="bg-blue-900/20 p-4 border border-blue-500/30">
           <div className="flex items-center justify-between">
             <div>
