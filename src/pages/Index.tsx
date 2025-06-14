@@ -1,4 +1,3 @@
-
 import React, { useState, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -125,7 +124,7 @@ export default function IndexPage() {
 
                     // Add Privacy Signals
                     const privacySignals: string[] = [];
-                    if (parsedRequest.regs?.gdpr === 1) {
+                    if (parsedRequest.regs?.ext?.gdpr === 1) {
                         privacySignals.push('GDPR Applicable');
                     }
                     if (parsedRequest.user?.ext?.consent) {
