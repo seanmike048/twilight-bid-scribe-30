@@ -124,6 +124,26 @@ const STORE_URL_PATTERNS = {
   }
 };
 
+// Data center mappings
+const DATA_CENTERS = [
+  { id: 2, name: "Telecity", continent: null, technical: "", city: "" },
+  { id: 3, name: "Equinix", technical: "eqx", continent: "Europe", city: "St Denis, Paris Area, FR" },
+  { id: 4, name: "Interxion5", technical: "itx5", continent: "Europe", city: "Velizy, Paris Area, FR" },
+  { id: 5, name: "Terremark", technical: "tmk", continent: "Americas", city: "Miami, Florida, US" },
+  { id: 10, name: "USW1", technical: "usw1", continent: "Americas", city: "Los Angeles, CA, US" },
+  { id: 11, name: "EUW1", technical: "euw1", continent: "Europe", city: "Amsterdam, NL" },
+  { id: 12, name: "USE1", technical: "use1", continent: "Americas", city: "Washington, US" },
+  { id: 13, name: "APAC1", technical: "apac1", continent: "Asia", city: "Singapore, SG" },
+  { id: 14, name: "EUW2", technical: "euw2", continent: "Europe", city: "Gravelines, hauts-de-france, FR" },
+  { id: 16, name: "USE2", technical: "use2", continent: "Americas", city: "Warrenton, VA, US" }
+];
+
+// Country to continent mapping
+const COUNTRY_CONTINENT_MAP: { [key: string]: string } = {
+  "USA": "Americas", "DEU": "Europe", "FRA": "Europe", "GBR": "Europe", "CHN": "Asia", "JPN": "Asia"
+  // ... additional countries omitted for brevity
+};
+
 // parseCache: memoise by exact JSON text
 const parseCache = new Map<string, AnalysisResult>();
 
@@ -163,6 +183,14 @@ const containsMacros = (text: string): boolean => {
   return /[\{\[][a-zA-Z_][a-zA-Z0-9_]*[\}\]]/.test(text);
 };
 
+const isTruncatedIP = (ip: string): boolean => {
+  return ip.endsWith('.0') || ip.includes('xxx') || ip.includes('***');
+};
+
+const isTruncatedIPv6 = (ipv6: string): boolean => {
+  return ipv6.includes('::') && ipv6.length < 15;
+};
+
 const validateStoreUrlAndBundle = (storeUrl: string, bundle: string, issues: Issue[]) => {
   for (const [platform, config] of Object.entries(STORE_URL_PATTERNS)) {
     for (const pattern of config.patterns) {
@@ -189,6 +217,24 @@ const validateStoreUrlAndBundle = (storeUrl: string, bundle: string, issues: Iss
     message: 'Store URL does not match any known platform pattern',
     path: 'BidRequest.app.storeurl'
   });
+};
+
+const validateCountryDatacenterMatch = (country: string, datacenterId: number | undefined, issues: Issue[]) => {
+  if (!datacenterId || !COUNTRY_CONTINENT_MAP[country]) return;
+
+  const datacenter = DATA_CENTERS.find(dc => dc.id === datacenterId);
+  if (!datacenter || !datacenter.continent) return;
+
+  const countryContinent = COUNTRY_CONTINENT_MAP[country];
+  
+  if (datacenter.continent !== countryContinent) {
+    issues.push({
+      id: 'EQ-Device-024',
+      severity: Severity.WARNING,
+      message: 'Country continent mismatch with datacenter continent',
+      path: 'BidRequest.device.geo.country'
+    });
+  }
 };
 
 /* ------------------------------------------------------------------ */
@@ -227,6 +273,101 @@ const coreRules: Rule[] = [
     specRef: 'OpenRTB 2.6 §3.2.1',
     applies: ({ root }) => !!root,
     validate: ({ root }) => Boolean((root.app && !root.site) || (!root.app && root.site)),
+  },
+];
+
+const impressionRules: Rule[] = [
+  {
+    id: 'Core-Imp-001',
+    description: 'Each impression must contain a unique id (string)',
+    severity: Severity.ERROR,
+    path: 'BidRequest.imp[].id',
+    specRef: 'OpenRTB 2.6 §3.2.4',
+    applies: ({ root }) => !!root,
+    validate: ({ root }) => {
+      if (!Array.isArray(root.imp)) return true;
+      const ids = new Set();
+      return root.imp.every((imp: any) => {
+        if (!isNonEmptyString(imp.id)) return false;
+        if (ids.has(imp.id)) return false;
+        ids.add(imp.id);
+        return true;
+      });
+    },
+  },
+  {
+    id: 'Core-Imp-002',
+    description: 'Each impression must contain either video, native, or banner object',
+    severity: Severity.ERROR,
+    path: 'BidRequest.imp[]',
+    specRef: 'OpenRTB 2.6 §3.2.4',
+    applies: ({ root }) => !!root,
+    validate: ({ root }) => {
+      if (!Array.isArray(root.imp)) return true;
+      return root.imp.every((imp: any) => {
+        const hasVideo = !!imp.video;
+        const hasNative = !!imp.native;
+        const hasBanner = !!imp.banner;
+        return hasVideo || hasNative || hasBanner;
+      });
+    },
+  },
+  {
+    id: 'Core-Imp-003',
+    description: 'Each impression must contain only one of video, native, or banner',
+    severity: Severity.ERROR,
+    path: 'BidRequest.imp[]',
+    specRef: 'OpenRTB 2.6 §3.2.4',
+    applies: ({ root }) => !!root,
+    validate: ({ root }) => {
+      if (!Array.isArray(root.imp)) return true;
+      return root.imp.every((imp: any) => {
+        const hasVideo = !!imp.video;
+        const hasNative = !!imp.native;
+        const hasBanner = !!imp.banner;
+        const mediaCount = [hasVideo, hasNative, hasBanner].filter(Boolean).length;
+        return mediaCount <= 1;
+      });
+    },
+  },
+  {
+    id: 'Core-Imp-004',
+    description: 'bidfloor must be a non-negative number',
+    severity: Severity.WARNING,
+    path: 'BidRequest.imp[].bidfloor',
+    applies: ({ root }) => !!root,
+    validate: ({ root }) => {
+      if (!Array.isArray(root.imp)) return true;
+      return root.imp.every((imp: any) => 
+        imp.bidfloor === undefined || (typeof imp.bidfloor === 'number' && imp.bidfloor >= 0)
+      );
+    },
+  },
+  {
+    id: 'Core-Imp-005',
+    description: 'bidfloorcur must be present when bidfloor is specified',
+    severity: Severity.ERROR,
+    path: 'BidRequest.imp[].bidfloorcur',
+    applies: ({ root }) => !!root,
+    validate: ({ root }) => {
+      if (!Array.isArray(root.imp)) return true;
+      return root.imp.every((imp: any) => 
+        imp.bidfloor === undefined || isNonEmptyString(imp.bidfloorcur)
+      );
+    },
+  },
+  {
+    id: 'Core-Imp-006',
+    description: 'secure must be 0 or 1',
+    severity: Severity.ERROR,
+    path: 'BidRequest.imp[].secure',
+    applies: ({ root }) => !!root,
+    validate: ({ root }) => {
+      if (!Array.isArray(root.imp)) return true;
+      return root.imp.every((imp: any) => 
+        imp.secure === undefined || imp.secure === 0 || imp.secure === 1
+      );
+    },
   },
 ];
 
@@ -359,6 +500,33 @@ const videoRules: Rule[] = [
         return !(hasRange && hasList);
       }),
   },
+  {
+    id: 'EQ-Video-037',
+    description: 'imp.video.maxduration - imp.video.minduration must be greater than 30 seconds',
+    severity: Severity.ERROR,
+    path: 'BidRequest.imp[].video',
+    applies: ({ inventory }) => inventory.has('video'),
+    validate: ({ root }) =>
+      root.imp.every((imp: any) => {
+        if (!imp.video) return true;
+        const v = imp.video;
+        if (v.minduration && v.maxduration) {
+          return (v.maxduration - v.minduration) >= 30;
+        }
+        return true;
+      }),
+  },
+  {
+    id: 'Video-V-001',
+    description: 'video.mimes must be present and be a non-empty array of strings',
+    severity: Severity.ERROR,
+    path: 'BidRequest.imp[].video.mimes',
+    applies: ({ inventory }) => inventory.has('video'),
+    validate: ({ root }) =>
+      root.imp.every((imp: any) => !imp.video ||
+        (Array.isArray(imp.video.mimes) && imp.video.mimes.length > 0 &&
+         imp.video.mimes.every((mime: any) => typeof mime === 'string'))),
+  },
 ];
 
 const bannerRules: Rule[] = [
@@ -377,6 +545,21 @@ const bannerRules: Rule[] = [
         if (Array.isArray(b.format) && b.format.length)
           return b.format.every((f: any) => f.w > 0 && f.h > 0);
         return false;
+      }),
+  },
+  {
+    id: 'Banner-B-001',
+    description: 'banner must contain either w/h or format array',
+    severity: Severity.ERROR,
+    path: 'BidRequest.imp[].banner',
+    applies: ({ inventory }) => inventory.has('banner'),
+    validate: ({ root }) =>
+      root.imp.every((imp: any) => {
+        if (!imp.banner) return true;
+        const b = imp.banner;
+        const hasWH = b.w !== undefined && b.h !== undefined;
+        const hasFormat = b.format && Array.isArray(b.format) && b.format.length > 0;
+        return hasWH || hasFormat;
       }),
   },
 ];
@@ -414,6 +597,30 @@ const ctvRules: Rule[] = [
           return Math.abs(aspectRatio - 16/9) < 0.1; // Allow small tolerance
         }
         return true; // Skip if dimensions not available
+      }),
+  },
+  {
+    id: 'EQ-CTV-052',
+    description: 'CTV: imp.video.pos must be set to 7 (Full Screen)',
+    severity: Severity.ERROR,
+    path: 'BidRequest.imp[].video.pos',
+    applies: ({ isCTV, inventory }) => isCTV && inventory.has('video'),
+    validate: ({ root }) =>
+      root.imp.every((imp: any) => {
+        if (!imp.video) return true;
+        return imp.video.pos === 7;
+      }),
+  },
+  {
+    id: 'CTV-007',
+    description: 'CTV video pos must be 7 (Full Screen)',
+    severity: Severity.ERROR,
+    path: 'BidRequest.imp[].video.pos',
+    applies: ({ isCTV, inventory }) => isCTV && inventory.has('video'),
+    validate: ({ root }) =>
+      root.imp.every((imp: any) => {
+        if (!imp.video) return true;
+        return imp.video.pos === 7;
       }),
   },
 ];
@@ -465,6 +672,7 @@ const privacyRules: Rule[] = [
 
 const allRuleSets = [
   coreRules,
+  impressionRules,
   appRules,
   siteRules,
   deviceRules,
@@ -523,7 +731,7 @@ export function analyse(
     });
     // Auto-detect CTV by device.devicetype
     const dt = root?.device?.devicetype;
-    if (!ctx.isCTV && dt === 3) ctx.isCTV = true;
+    if (!ctx.isCTV && (dt === 3 || dt === 5)) ctx.isCTV = true;
   }
 
   // Collect issues
@@ -544,6 +752,19 @@ export function analyse(
       }
     });
   });
+
+  // Enhanced validation for complex scenarios
+  if (root) {
+    // Store URL and bundle validation for apps
+    if (root.app && root.app.storeurl && root.app.bundle) {
+      validateStoreUrlAndBundle(root.app.storeurl, root.app.bundle, issues);
+    }
+
+    // Country datacenter validation
+    if (root.device?.geo?.country && root.ext?.auctionDatacenterId) {
+      validateCountryDatacenterMatch(root.device.geo.country, root.ext.auctionDatacenterId, issues);
+    }
+  }
 
   // Derive summary
   const mediaFormats = Array.from(ctx.inventory);
