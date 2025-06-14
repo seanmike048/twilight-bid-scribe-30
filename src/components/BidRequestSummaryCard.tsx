@@ -76,9 +76,23 @@ export const BidRequestSummaryCard: React.FC<{ summary: AnalysisSummary }> = ({ 
         <Separator className="bg-slate-700" />
         
         <DetailItem label="Privacy Signals" icon={<Shield className="w-4 h-4 mr-2 text-slate-400" />}>
-          <p className="font-semibold text-base text-white break-words">
-            {summary.privacySignals && summary.privacySignals.length > 0 ? summary.privacySignals.join(', ') : 'None detected'}
-          </p>
+          {summary.privacySignals && summary.privacySignals.length > 0 ? (
+            <div className="flex flex-wrap gap-2 mt-1">
+              {summary.privacySignals.map((signal, index) => (
+                <Badge
+                  key={index}
+                  variant="outline"
+                  className="border-green-700/60 bg-green-950 text-green-300 font-normal rounded-md"
+                >
+                  {signal}
+                </Badge>
+              ))}
+            </div>
+          ) : (
+            <p className="font-semibold text-base text-white break-words">
+              None detected
+            </p>
+          )}
         </DetailItem>
         
       </CardContent>
