@@ -13,27 +13,27 @@ import { BulkAnalysis } from '@/components/BulkAnalysis';
 import { FileUpload } from '@/components/FileUpload';
 
 const Header = ({ mode, setMode }: { mode: 'single' | 'bulk', setMode: (m: 'single' | 'bulk') => void }) => (
-    <header className="flex justify-between items-center mb-8">
+    <header className="flex justify-between items-center mb-6">
         <div className="flex items-center space-x-3">
             <div className="bg-slate-800 p-2 rounded-lg border border-slate-700">
                 <svg className="w-6 h-6 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
             </div>
             <h1 className="text-2xl font-bold text-white">BABE Verificator</h1>
         </div>
-        <div className="flex items-center space-x-2 bg-slate-900 border border-slate-700 rounded-lg p-1">
+        <div className="flex items-center space-x-2 bg-slate-800 border border-slate-700 rounded-lg p-1">
             <Button 
               variant={mode === 'single' ? 'secondary' : 'ghost'} 
-              className={mode === 'single' ? 'bg-white text-slate-900 hover:bg-slate-200' : ''}
+              className={`px-4 py-1.5 h-auto text-sm ${mode === 'single' ? 'bg-slate-200 text-slate-900 hover:bg-slate-300' : 'text-slate-300 hover:bg-slate-700 hover:text-white'}`}
               onClick={() => setMode('single')}
             >
-              Single Mode
+              Single Analysis
             </Button>
             <Button 
               variant={mode === 'bulk' ? 'secondary' : 'ghost'}
-              className={mode === 'bulk' ? 'bg-white text-slate-900 hover:bg-slate-200' : ''}
+              className={`px-4 py-1.5 h-auto text-sm ${mode === 'bulk' ? 'bg-slate-200 text-slate-900 hover:bg-slate-300' : 'text-slate-300 hover:bg-slate-700 hover:text-white'}`}
               onClick={() => setMode('bulk')}
             >
-              Bulk Mode
+              Bulk Upload
             </Button>
         </div>
     </header>
@@ -44,7 +44,7 @@ const JsonEditor = ({ jsonText, onTextChange }: { jsonText: string; onTextChange
         value={jsonText}
         onChange={(e) => onTextChange(e.target.value)}
         placeholder="Paste your OpenRTB bid request here..."
-        className="w-full h-full p-4 font-mono text-sm bg-slate-900 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500 text-slate-300 resize-none border border-slate-700 overflow-y-auto"
+        className="w-full h-full p-4 font-mono text-sm bg-slate-900 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500 text-slate-300 resize-none border border-slate-700"
         spellCheck="false"
     />
 );
@@ -86,7 +86,6 @@ export default function IndexPage() {
         
         setIsLoading(true);
         
-        // Add small delay for better UX
         setTimeout(() => {
             const { analysis, issues } = analyzer.analyze(jsonText);
             setAnalysisResult(analysis);
@@ -105,12 +104,14 @@ export default function IndexPage() {
         setJsonText(exampleBidRequests[key]);
         setAnalysisResult(null);
         setValidationIssues([]);
+        toast.info(`Loaded "${key}" example.`);
     }, []);
 
     const handleFormat = useCallback(() => {
         try {
             const parsed = JSON.parse(jsonText);
             setJsonText(JSON.stringify(parsed, null, 2));
+            toast.success("JSON formatted successfully.");
         } catch {
             toast.error("Cannot format invalid JSON.");
         }
@@ -133,21 +134,7 @@ export default function IndexPage() {
                 toast.success(`${requests.length} requests loaded from ${file.name}`);
             } catch (e) {
                 setIsLoading(false);
-                setAnalysisResult({ 
-                    summary: {
-                        requestType: 'Unknown', 
-                        mediaFormats: [], 
-                        impressions: 0, 
-                        platform: 'Unknown', 
-                        deviceType: 'Unknown', 
-                        geo: 'N/A'
-                    },
-                    issues: [],
-                    request: undefined,
-                    error: 'Failed to parse log file. Ensure it contains one valid JSON per line.'
-                });
-                setValidationIssues([]);
-                toast.error('Failed to parse log file');
+                toast.error('Failed to parse file. Ensure it contains one valid JSON per line.');
             }
         };
         
@@ -160,11 +147,11 @@ export default function IndexPage() {
         setAnalysisResult(null);
         setValidationIssues([]);
         
-        // Auto-analyze the selected request
         setTimeout(() => {
             const { analysis, issues } = analyzer.analyze(JSON.stringify(request, null, 2));
             setAnalysisResult(analysis);
             setValidationIssues(issues);
+            toast.info("Switched to single analysis for selected request.");
         }, 100);
     }, []);
 
@@ -174,30 +161,18 @@ export default function IndexPage() {
         setValidationIssues([]);
     }, []);
 
-    const switchMode = useCallback((newMode: 'single' | 'bulk') => {
-        setMode(newMode);
-        if (newMode === 'single') {
-            setJsonText('');
-            setAnalysisResult(null);
-            setValidationIssues([]);
-        } else {
-            setBulkRequests([]);
-            setFileName('');
-        }
-    }, []);
-
     return (
         <div className="min-h-screen bg-[#0c111d] text-slate-200 font-sans">
-            <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-                <Header mode={mode} setMode={switchMode} />
+            <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+                <Header mode={mode} setMode={setMode} />
                 
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 h-[calc(100vh-12rem)]">
-                    <div className="lg:col-span-5 flex flex-col space-y-4 h-full">
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-8" style={{height: 'calc(100vh - 8rem)'}}>
+                    <div className="lg:col-span-5 flex flex-col h-full">
                         {mode === 'single' ? (
                             <Card className="bg-slate-900 border-slate-800 flex flex-col flex-grow h-full">
-                                <CardHeader className="flex flex-row items-center justify-between py-4 px-6 border-b border-slate-800 flex-shrink-0">
-                                    <CardTitle className="text-lg flex items-center">
-                                        <FileText className="w-5 h-5 mr-2 text-orange-400" />
+                                <CardHeader className="flex flex-row items-center justify-between py-3 px-4 border-b border-slate-800 flex-shrink-0">
+                                    <CardTitle className="text-base flex items-center font-semibold">
+                                        <FileText className="w-4 h-4 mr-2 text-orange-400" />
                                         Bid Request Input
                                     </CardTitle>
                                     <div className="flex items-center space-x-2">
@@ -205,14 +180,14 @@ export default function IndexPage() {
                                         <ExamplesDropdown onLoadExample={handleLoadExample} />
                                     </div>
                                 </CardHeader>
-                                <CardContent className="p-2 flex-grow overflow-hidden">
+                                <CardContent className="p-0 flex-grow overflow-hidden">
                                     <JsonEditor jsonText={jsonText} onTextChange={setJsonText} />
                                 </CardContent>
-                                <div className="p-4 border-t border-slate-800 flex items-center space-x-4 flex-shrink-0">
+                                <div className="p-3 border-t border-slate-800 flex items-center space-x-2 flex-shrink-0">
                                     <Button 
                                         onClick={handleAnalyze} 
                                         disabled={isLoading || !jsonText} 
-                                        className="w-full bg-orange-500 hover:bg-orange-600 text-slate-900 font-bold py-3 text-base"
+                                        className="w-full bg-orange-500 hover:bg-orange-600 text-slate-900 font-bold py-2 text-sm"
                                     >
                                         {isLoading ? (
                                             <div className="animate-spin w-5 h-5 border-2 border-current border-t-transparent rounded-full mr-2" />
@@ -221,7 +196,7 @@ export default function IndexPage() {
                                         )}
                                         {isLoading ? 'Analyzing...' : 'Analyze Request'}
                                     </Button>
-                                    <Button variant="outline" onClick={handleClear}>
+                                    <Button variant="ghost" size="icon" onClick={handleClear} className="text-slate-400 hover:text-white hover:bg-slate-700">
                                         <Trash2 className="w-5 h-5"/>
                                     </Button>
                                 </div>
@@ -231,7 +206,7 @@ export default function IndexPage() {
                         )}
                     </div>
                     
-                    <div className="lg:col-span-7 h-full">
+                    <div className="lg:col-span-7 h-full overflow-y-auto pr-2">
                         {mode === 'single' ? (
                             <ValidationResults 
                                 analysis={analysisResult} 
