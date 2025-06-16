@@ -3,7 +3,9 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Toaster, toast } from 'sonner';
-import { FileText, Play, Trash2, ChevronDown } from 'lucide-react';
+import { FileText, Play, Trash2, ChevronDown, Info } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 import { analyzer, AnalysisResult, ValidationIssue } from '@/lib/analyzer';
 import { exampleBidRequests } from '@/lib/exampleData';
@@ -11,32 +13,56 @@ import { ValidationResults } from '@/components/ValidationResults';
 import { BulkAnalysis } from '@/components/BulkAnalysis';
 import { FileUpload } from '@/components/FileUpload';
 
-const Header = ({ mode, setMode }: { mode: 'single' | 'bulk', setMode: (m: 'single' | 'bulk') => void }) => (
-    <header className="flex justify-between items-center mb-6">
-        <div className="flex items-center space-x-3">
-            <div className="bg-slate-800 p-2 rounded-lg border border-slate-700">
-                <svg className="w-6 h-6 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
+const Header = ({ mode, setMode }: { mode: 'single' | 'bulk', setMode: (m: 'single' | 'bulk') => void }) => {
+    const navigate = useNavigate();
+    
+    return (
+        <header className="flex justify-between items-center mb-6">
+            <div className="flex items-center space-x-3">
+                <div className="bg-slate-800 p-2 rounded-lg border border-slate-700">
+                    <svg className="w-6 h-6 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
+                </div>
+                <h1 className="text-2xl font-bold text-white">BABE Verificator</h1>
             </div>
-            <h1 className="text-2xl font-bold text-white">BABE Verificator</h1>
-        </div>
-        <div className="flex items-center space-x-2 bg-slate-800 border border-slate-700 rounded-lg p-1">
-            <Button 
-              variant={mode === 'single' ? 'secondary' : 'ghost'} 
-              className={`px-4 py-1.5 h-auto text-sm ${mode === 'single' ? 'bg-slate-200 text-slate-900 hover:bg-slate-300' : 'text-slate-300 hover:bg-slate-700 hover:text-white'}`}
-              onClick={() => setMode('single')}
-            >
-              Single Analysis
-            </Button>
-            <Button 
-              variant={mode === 'bulk' ? 'secondary' : 'ghost'}
-              className={`px-4 py-1.5 h-auto text-sm ${mode === 'bulk' ? 'bg-slate-200 text-slate-900 hover:bg-slate-300' : 'text-slate-300 hover:bg-slate-700 hover:text-white'}`}
-              onClick={() => setMode('bulk')}
-            >
-              Bulk Upload
-            </Button>
-        </div>
-    </header>
-);
+            <div className="flex items-center space-x-4">
+                <TooltipProvider>
+                    <Tooltip>
+                        <TooltipTrigger asChild>
+                            <Button 
+                                variant="outline" 
+                                size="sm"
+                                onClick={() => navigate('/rulebook')}
+                                className="bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700 hover:text-white"
+                            >
+                                <Info className="w-4 h-4 sm:mr-2" />
+                                <span className="hidden sm:inline">Rulebook</span>
+                            </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                            <p>OpenRTB rulebook</p>
+                        </TooltipContent>
+                    </Tooltip>
+                </TooltipProvider>
+                <div className="flex items-center space-x-2 bg-slate-800 border border-slate-700 rounded-lg p-1">
+                    <Button 
+                      variant={mode === 'single' ? 'secondary' : 'ghost'} 
+                      className={`px-4 py-1.5 h-auto text-sm ${mode === 'single' ? 'bg-slate-200 text-slate-900 hover:bg-slate-300' : 'text-slate-300 hover:bg-slate-700 hover:text-white'}`}
+                      onClick={() => setMode('single')}
+                    >
+                      Single Analysis
+                    </Button>
+                    <Button 
+                      variant={mode === 'bulk' ? 'secondary' : 'ghost'}
+                      className={`px-4 py-1.5 h-auto text-sm ${mode === 'bulk' ? 'bg-slate-200 text-slate-900 hover:bg-slate-300' : 'text-slate-300 hover:bg-slate-700 hover:text-white'}`}
+                      onClick={() => setMode('bulk')}
+                    >
+                      Bulk Upload
+                    </Button>
+                </div>
+            </div>
+        </header>
+    );
+};
 
 const JsonEditor = ({ jsonText, onTextChange }: { jsonText: string; onTextChange: (text: string) => void }) => (
     <textarea
