@@ -67,6 +67,16 @@ multiple JSON objects separated by whitespace or provide a JSON array of
 requests. Each object is parsed individually and can be browsed using the
 pagination controls below the results.
 
+Example with three requests:
+
+```json
+[
+  { "id": "req1", "imp": [] },
+  { "id": "req2", "imp": [] },
+  { "id": "req3", "imp": [] }
+]
+```
+
 ## How can I deploy this project?
 
 Simply open [Lovable](https://lovable.dev/projects/69a676e1-7a48-4125-a410-e270a35470bf) and click on Share -> Publish.
