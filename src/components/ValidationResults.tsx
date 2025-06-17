@@ -5,14 +5,25 @@ import { Badge } from '@/components/ui/badge';
 import { AlertTriangle, XCircle, Info, CheckCircle, Eye } from 'lucide-react';
 import { AnalysisResult, ValidationIssue } from '@/lib/analyzer';
 import { BidRequestSummaryCard } from './BidRequestSummaryCard';
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from '@/components/ui/pagination';
 
 interface Props {
   analysis: AnalysisResult | null;
   issues: ValidationIssue[];
   isLoading: boolean;
+  page?: number;
+  totalPages?: number;
+  onPageChange?: (page: number) => void;
 }
 
-export const ValidationResults: React.FC<Props> = ({ analysis, issues, isLoading }) => {
+export const ValidationResults: React.FC<Props> = ({ analysis, issues, isLoading, page = 0, totalPages = 0, onPageChange }) => {
   const [filter, setFilter] = useState<'All' | 'Error' | 'Warning' | 'Info'>('All');
 
   if (isLoading) {
@@ -163,6 +174,27 @@ export const ValidationResults: React.FC<Props> = ({ analysis, issues, isLoading
           )}
         </CardContent>
       </Card>
+      {totalPages > 1 && (
+        <div className="pt-4">
+          <Pagination>
+            <PaginationContent>
+              <PaginationItem>
+                <PaginationPrevious onClick={() => onPageChange && onPageChange(page - 1)} />
+              </PaginationItem>
+              {Array.from({ length: totalPages }).map((_, i) => (
+                <PaginationItem key={i}>
+                  <PaginationLink isActive={i === page} onClick={() => onPageChange && onPageChange(i)}>
+                    {i + 1}
+                  </PaginationLink>
+                </PaginationItem>
+              ))}
+              <PaginationItem>
+                <PaginationNext onClick={() => onPageChange && onPageChange(page + 1)} />
+              </PaginationItem>
+            </PaginationContent>
+          </Pagination>
+        </div>
+      )}
     </div>
   );
 };

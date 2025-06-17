@@ -9,6 +9,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 
 import { analyzer, AnalysisResult, ValidationIssue } from '@/lib/analyzer';
 import { exampleBidRequests } from '@/lib/exampleData';
+import { splitJsonObjects } from '@/lib/utils';
 import { ValidationResults } from '@/components/ValidationResults';
 import { BulkAnalysis } from '@/components/BulkAnalysis';
 import { FileUpload } from '@/components/FileUpload';
@@ -100,6 +101,8 @@ export default function IndexPage() {
     const [jsonText, setJsonText] = useState(exampleBidRequests['display']);
     const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
     const [validationIssues, setValidationIssues] = useState<ValidationIssue[]>([]);
+    const [multiResults, setMultiResults] = useState<{ analysis: AnalysisResult; issues: ValidationIssue[]; text: string }[]>([]);
+    const [page, setPage] = useState(0);
     const [fileName, setFileName] = useState('');
     const [bulkRequests, setBulkRequests] = useState<any[]>([]);
 
@@ -108,15 +111,33 @@ export default function IndexPage() {
             toast.error("Input is empty.");
             return;
         }
-        
+
         setIsLoading(true);
-        
+
         setTimeout(() => {
-            const { analysis, issues } = analyzer.analyze(jsonText);
-            
+            const objects = splitJsonObjects(jsonText);
+            if (!objects.length) {
+                toast.error("No valid JSON found.");
+                setIsLoading(false);
+                return;
+            }
+
+            const results = objects.map(obj => {
+                const { analysis, issues } = analyzer.analyze(obj);
+                let formatted = obj;
+                try { formatted = JSON.stringify(JSON.parse(obj), null, 2); } catch {}
+                return { analysis, issues, text: formatted };
+            });
+
+            setMultiResults(results);
+            setPage(0);
+
+            const { analysis, issues, text } = results[0];
+            setJsonText(text);
+
             if (analysis && !analysis.error) {
                 try {
-                    const parsedRequest = JSON.parse(jsonText);
+                    const parsedRequest = JSON.parse(text);
                     const summary = analysis.summary as any;
 
                     // Enhance summary with data the analyzer might have missed
@@ -186,13 +207,16 @@ export default function IndexPage() {
         setJsonText(exampleBidRequests[key]);
         setAnalysisResult(null);
         setValidationIssues([]);
+        setMultiResults([]);
+        setPage(0);
         toast.info(`Loaded "${key}" example.`);
     }, []);
 
     const handleFormat = useCallback(() => {
         try {
-            const parsed = JSON.parse(jsonText);
-            setJsonText(JSON.stringify(parsed, null, 2));
+            const parts = splitJsonObjects(jsonText);
+            const formatted = parts.map(p => JSON.stringify(JSON.parse(p), null, 2)).join('\n\n');
+            setJsonText(formatted);
             toast.success("JSON formatted successfully.");
         } catch {
             toast.error("Cannot format invalid JSON.");
@@ -206,7 +230,7 @@ export default function IndexPage() {
         reader.onload = (event) => {
             try {
                 const text = event.target?.result as string;
-                const requests = text.split('\n').filter(line => line.trim()).map(line => JSON.parse(line));
+                const requests = splitJsonObjects(text).map(t => JSON.parse(t));
                 
                 setMode('bulk');
                 setFileName(file.name);
@@ -216,7 +240,7 @@ export default function IndexPage() {
                 toast.success(`${requests.length} requests loaded from ${file.name}`);
             } catch (e) {
                 setIsLoading(false);
-                toast.error('Failed to parse file. Ensure it contains one valid JSON per line.');
+                toast.error('Failed to parse file. Ensure it contains valid JSON objects.');
             }
         };
         
@@ -241,6 +265,8 @@ export default function IndexPage() {
         setJsonText('');
         setAnalysisResult(null);
         setValidationIssues([]);
+        setMultiResults([]);
+        setPage(0);
     }, []);
 
     return (
@@ -290,10 +316,21 @@ export default function IndexPage() {
                     
                     <div className="lg:col-span-7 h-full">
                         {mode === 'single' ? (
-                            <ValidationResults 
-                                analysis={analysisResult} 
-                                issues={validationIssues} 
-                                isLoading={isLoading} 
+                            <ValidationResults
+                                analysis={analysisResult}
+                                issues={validationIssues}
+                                isLoading={isLoading}
+                                page={page}
+                                totalPages={multiResults.length}
+                                onPageChange={(p) => {
+                                    if (p >= 0 && p < multiResults.length) {
+                                        setPage(p);
+                                        const entry = multiResults[p];
+                                        setAnalysisResult(entry.analysis);
+                                        setValidationIssues(entry.issues);
+                                        setJsonText(entry.text);
+                                    }
+                                }}
                             />
                         ) : (
                             <BulkAnalysis 
