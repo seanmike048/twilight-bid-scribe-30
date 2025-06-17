@@ -60,6 +60,11 @@ This project is built with:
 - shadcn-ui
 - Tailwind CSS
 
+## Bid request analysis
+
+The analyzer supports multiple bid requests in a single input. Each JSON object
+is parsed individually and results can be viewed using pagination controls.
+
 ## How can I deploy this project?
 
 Simply open [Lovable](https://lovable.dev/projects/69a676e1-7a48-4125-a410-e270a35470bf) and click on Share -> Publish.
