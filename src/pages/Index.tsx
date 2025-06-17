@@ -147,6 +147,7 @@ const ExamplesDropdown = ({
       <DropdownMenuItem onSelect={() => onLoadExample("malformed-json")}>
         Malformed JSON
       </DropdownMenuItem>
+
     </DropdownMenuContent>
   </DropdownMenu>
 );
