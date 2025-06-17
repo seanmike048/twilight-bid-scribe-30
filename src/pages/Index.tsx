@@ -147,9 +147,6 @@ const ExamplesDropdown = ({
       <DropdownMenuItem onSelect={() => onLoadExample("malformed-json")}>
         Malformed JSON
       </DropdownMenuItem>
-      <DropdownMenuItem onSelect={() => onLoadExample("multiple")}>
-        Multiple Requests
-      </DropdownMenuItem>
     </DropdownMenuContent>
   </DropdownMenu>
 );
@@ -282,18 +279,7 @@ export default function IndexPage() {
 
   const handleFormat = useCallback(() => {
     try {
-      const trimmed = jsonText.trim();
-      if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
-        // Keep array structure when formatting multiple requests
-        const arr = JSON.parse(trimmed);
-        setJsonText(JSON.stringify(arr, null, 2));
-      } else {
-        const parts = splitJsonObjects(jsonText);
-        const formatted = parts
-          .map((p) => JSON.stringify(JSON.parse(p), null, 2))
-          .join("\n\n");
-        setJsonText(formatted);
-      }
+
       toast.success("JSON formatted successfully.");
     } catch {
       toast.error("Cannot format invalid JSON.");
