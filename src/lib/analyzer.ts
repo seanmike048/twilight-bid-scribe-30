@@ -881,7 +881,7 @@ const appRules: Rule[] = [
   {
     id: 'EQ-App-017',
     description: 'app.name must be present and be a non-empty string',
-    severity: Severity.ERROR,
+    severity: Severity.WARNING,
     path: 'BidRequest.app.name',
     applies: ({ root }) => !!root?.app,
     validate: ({ root }) => isNonEmptyString(root.app.name),
