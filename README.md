@@ -63,9 +63,7 @@ This project is built with:
 ## Bid request analysis
 
 The analyzer supports multiple bid requests in a single input. You can paste
-multiple JSON objects separated by whitespace or provide a JSON array of
-requests. Each object is parsed individually and can be browsed using the
-pagination controls below the results.
+
 
 ## How can I deploy this project?
 

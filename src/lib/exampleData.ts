@@ -483,7 +483,12 @@ export const BID_REQUEST_EXAMPLES: Record<string, any> = {
     "ua": "Mozilla/5.0...",
     "ip": 
   }
-}`
+}`,
+  multiple: [
+    { "id": "multi-1", "imp": [] },
+    { "id": "multi-2", "imp": [] },
+    { "id": "multi-3", "imp": [] }
+  ]
 };
 
 // For backwards compatibility
